@@ -1,0 +1,26 @@
+# Gradle
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android
+.idea
+*.iml
+local.properties
+.externalNativeBuild
+.cxx
+
+# Kotlin
+.kotlin
+kotlin-js-store
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# App specific
+androidApp/build/
+shared/build/
