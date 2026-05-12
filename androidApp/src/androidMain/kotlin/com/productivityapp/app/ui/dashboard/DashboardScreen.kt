@@ -29,6 +29,8 @@ import com.productivityapp.model.NoteItem
 import com.productivityapp.app.ui.vault.VaultScreen
 import com.productivityapp.app.ui.alarm.AlarmScreen
 import com.productivityapp.app.ui.notes.NoteEditorScreen
+import com.productivityapp.app.ui.tasks.TasksRepository
+import com.productivityapp.app.ui.tasks.AddTaskModal
 
 sealed class ZenithScreen {
     object Dashboard : ZenithScreen()
@@ -48,7 +50,7 @@ fun DashboardScreen() {
     val scope = rememberCoroutineScope()
     var isRightSidebarVisible by remember { mutableStateOf(false) }
     var isQuickActionsVisible by remember { mutableStateOf(false) }
-    var showAddTaskDialog by remember { mutableStateOf(false) }
+    var showAddTaskModal by remember { mutableStateOf(false) }
     var showAddVaultDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var currentScreen by remember { mutableStateOf<ZenithScreen>(ZenithScreen.Dashboard) }
@@ -155,7 +157,7 @@ fun DashboardScreen() {
                 onAction = { action ->
                     isQuickActionsVisible = false
                     when(action) {
-                        "To-Do" -> { currentScreen = ZenithScreen.Tasks; showAddTaskDialog = true }
+                        "Task" -> { showAddTaskModal = true }
                         "Note" -> { currentScreen = ZenithScreen.NoteEditor }
                         "Vault" -> { currentScreen = ZenithScreen.Vault; showAddVaultDialog = true }
                         "Alarm" -> currentScreen = ZenithScreen.Alarm
@@ -166,8 +168,18 @@ fun DashboardScreen() {
             )
         }
 
-        if (showAddTaskDialog) {
-            AddEntryDialog(title = "New Task", label = "Task Title", onDismiss = { showAddTaskDialog = false })
+        if (showAddTaskModal) {
+            AddTaskModal(
+                initialCategory = "Work",
+                onDismiss = { showAddTaskModal = false },
+                onTaskCreated = { title, category, priority ->
+                    TasksRepository.addTask(title, category, priority)
+                    showAddTaskModal = false
+                }
+            )
+        }
+        if (showAddVaultDialog) {
+            AddEntryDialog(title = "New Vault Entry", label = "Site Name", onDismiss = { showAddVaultDialog = false })
         }
         if (showAddVaultDialog) {
             AddEntryDialog(title = "New Vault Entry", label = "Site Name", onDismiss = { showAddVaultDialog = false })
@@ -215,10 +227,10 @@ fun QuickActionsModal(onClose: () -> Unit, onAction: (String) -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
             
             val actions = listOf(
-                Triple(Icons.Default.Lock, "Vault", { onAction("Vault") }),
                 Triple(Icons.Default.Edit, "Note", { onAction("Note") }),
+                Triple(Icons.Default.Done, "Task", { onAction("Task") }),
+                Triple(Icons.Default.Lock, "Vault", { onAction("Vault") }),
                 Triple(Icons.Default.PlayArrow, "Draw", { onAction("Draw") }),
-                Triple(Icons.Default.Done, "To-Do", { onAction("To-Do") }),
                 Triple(Icons.Default.Notifications, "Alarm", { onAction("Alarm") }),
                 Triple(Icons.Default.Info, "Reminder", { onAction("Reminder") }),
                 Triple(Icons.Default.Star, "AI Coach", { onClose() })
@@ -403,7 +415,9 @@ fun ZenithBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
         backgroundColor = Color(0xFF0F172A), // Match background
         contentColor = Color.White,
         elevation = 0.dp, // Flat look
-        modifier = Modifier.height(56.dp)
+        modifier = Modifier
+            .navigationBarsPadding()
+            .height(56.dp)
     ) {
         BottomNavItem(icon = Icons.Default.Home, label = "Home", selected = selectedTab == 0, onClick = { onTabSelected(0) })
         BottomNavItem(icon = Icons.Default.Done, label = "Tasks", selected = selectedTab == 1, onClick = { onTabSelected(1) })

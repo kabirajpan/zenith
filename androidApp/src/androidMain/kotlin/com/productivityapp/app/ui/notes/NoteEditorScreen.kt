@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -214,16 +216,38 @@ fun NoteEditorScreen(initialNote: NoteItem? = null, onBack: () -> Unit) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(56.dp)
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(onClick = saveAndBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                // Back Button
+                val backInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val backPressed by backInteraction.collectIsPressedAsState()
+                val backScale by androidx.compose.animation.core.animateFloatAsState(if (backPressed) 0.92f else 1f)
+                
+                Box(
+                    modifier = Modifier.size(48.dp).scale(backScale).clickable(interactionSource = backInteraction, indication = null, onClick = saveAndBack),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White.copy(alpha = if (backPressed) 0.5f else 1f), modifier = Modifier.size(24.dp))
                 }
+
                 Text("Notes", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                IconButton(onClick = saveAndBack) {
-                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+
+                // Share Button
+                val shareInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val sharePressed by shareInteraction.collectIsPressedAsState()
+                val shareScale by androidx.compose.animation.core.animateFloatAsState(if (sharePressed) 0.92f else 1f)
+
+                Box(
+                    modifier = Modifier.size(48.dp).scale(shareScale).clickable(interactionSource = shareInteraction, indication = null, onClick = {}),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White.copy(alpha = if (sharePressed) 0.5f else 1f), modifier = Modifier.size(24.dp))
                 }
             }
             
