@@ -25,7 +25,7 @@ fun VaultScreen() {
     var selectedCategory by remember { mutableStateOf("All") }
     var showAddModal by remember { mutableStateOf(false) }
     
-    val vaultItems = remember { mutableStateListOf(*dummyVaultItems.toTypedArray()) }
+    val vaultItems = remember { mutableStateListOf<VaultItem>() }
     val categories = listOf("All", "Social", "Work", "Finance")
     
     val filteredItems = remember(searchQuery, selectedCategory, vaultItems.size) {
@@ -135,7 +135,7 @@ fun VaultScreen() {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 20.dp)
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             items(filteredItems) { item ->
                 VaultCard(item)
@@ -212,16 +212,7 @@ data class VaultItem(
     val password: String
 )
 
-val dummyVaultItems = listOf(
-    VaultItem("Google Account", "user@gmail.com", "Social", "pass1234"),
-    VaultItem("GitHub", "zenith_dev", "Work", "git_secure_99"),
-    VaultItem("LinkedIn", "user_profile", "Work", "link_pass_00"),
-    VaultItem("Netflix", "home_account", "Social", "netflix_chill"),
-    VaultItem("Bank of Zenith", "acc_12345", "Finance", "bank_vault_88"),
-    VaultItem("Slack", "zenith_team", "Work", "slack_key_123"),
-    VaultItem("Twitter", "dev_daily", "Social", "tweet_pass_44"),
-    VaultItem("Binance", "crypto_vault", "Finance", "crypto_secure_77")
-)
+val dummyVaultItems = emptyList<VaultItem>()
 
 @Composable
 fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
@@ -234,7 +225,7 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
-            color = Color(0xFF121212),
+            color = Color(0xFF0F172A),
             shape = RoundedCornerShape(20.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {

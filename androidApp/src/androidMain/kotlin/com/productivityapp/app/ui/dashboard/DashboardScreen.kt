@@ -516,6 +516,8 @@ fun MainContent() {
             TaskItemPlaceholder(index)
             Spacer(modifier = Modifier.height(6.dp))
         }
+        
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 

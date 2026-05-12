@@ -133,7 +133,7 @@ fun NotesScreen(onNoteClick: (NoteItem) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 20.dp)
+                contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(filteredNotes) { note ->
                     NoteCard(note, onClick = { onNoteClick(note) })
