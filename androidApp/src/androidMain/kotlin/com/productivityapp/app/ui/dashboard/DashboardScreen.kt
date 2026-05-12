@@ -1,15 +1,23 @@
 package com.productivityapp.app.ui.dashboard
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.*
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -448,22 +456,21 @@ fun MainContent() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.Start
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(
             text = "Zenith",
             color = Color.White,
-            fontSize = 24.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         
-        // Compact Horizontal Calendar
-        HorizontalCalendar()
+        // Compact Horizontal Calendar / Activity Track Switcher
+        CalendarSection()
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         
         // Compact AI Nudge
         Box(
@@ -471,65 +478,141 @@ fun MainContent() {
                 .fillMaxWidth()
                 .background(
                     color = Color.White.copy(alpha = 0.04f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp)
                 )
-                .padding(12.dp)
+                .padding(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(28.dp)
                         .background(Color(0xFF818CF8).copy(alpha = 0.1f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(14.dp))
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "Stretch for 5 mins?",
                     color = Color.White,
-                    fontSize = 14.sp
+                    fontSize = 13.sp
                 )
             }
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         
         Text(
             text = "Tasks",
             color = Color.Gray,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 4.dp)
         )
         
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         
         repeat(4) { index ->
             TaskItemPlaceholder(index)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun CalendarSection() {
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val scope = rememberCoroutineScope()
+    
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Global Slider Switcher (Outside the cards)
+            Box(
+                modifier = Modifier
+                    .width(160.dp)
+                    .height(32.dp)
+                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
+                    .padding(3.dp)
+            ) {
+                val pillWidth = 77.dp
+                val offset by animateDpAsState(
+                    targetValue = if (pagerState.currentPage == 1) pillWidth else 0.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessLow)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .offset(x = offset)
+                        .width(pillWidth)
+                        .fillMaxHeight()
+                        .background(Color(0xFF818CF8), RoundedCornerShape(8.dp))
+                )
+
+                Row(modifier = Modifier.fillMaxSize()) {
+                    listOf("Calendar", "Track").forEachIndexed { index, label ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (pagerState.currentPage == index) Color.White else Color.Gray,
+                                fontSize = 11.sp,
+                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+            
+            Text(
+                if (pagerState.currentPage == 0) "May 2026" else "Activity Heatmap", 
+                color = Color.White.copy(alpha = 0.4f), 
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+            pageSpacing = 12.dp
+        ) { page ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp) // Fixed height to prevent layout jumps
+                    .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+            ) {
+                if (page == 0) {
+                    HorizontalCalendar()
+                } else {
+                    ActivityHeatmap()
+                }
+            }
         }
     }
 }
 
 @Composable
 fun HorizontalCalendar() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.02f), RoundedCornerShape(12.dp))
-            .padding(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("May 2026", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Icon(Icons.Default.DateRange, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -540,9 +623,9 @@ fun HorizontalCalendar() {
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         
-        // Month Grid (Simplified for demo)
+        // Month Grid
         val weeks = listOf(
             listOf("", "", "", "", 1, 2, 3),
             listOf(4, 5, 6, 7, 8, 9, 10),
@@ -560,7 +643,7 @@ fun HorizontalCalendar() {
                     val isToday = date == 11
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(34.dp)
                             .clip(CircleShape)
                             .background(if (isToday) Color(0xFF818CF8) else Color.Transparent),
                         contentAlignment = Alignment.Center
@@ -574,7 +657,250 @@ fun HorizontalCalendar() {
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+}
+
+@Composable
+fun ActivityHeatmap() {
+    var selectedYear by remember { mutableStateOf("2026") }
+    val years = listOf("2024", "2025", "2026", "Stats")
+    
+    val activityLevels = remember(selectedYear) {
+        List(7) { List(53) { (0..4).random() } }
+    }
+    
+    val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    val scrollState = rememberScrollState()
+    
+    LaunchedEffect(selectedYear) {
+        if (selectedYear != "Stats") {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // High-Fidelity Year Switcher (Pill Style)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(30.dp)
+                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
+                    .padding(3.dp)
+            ) {
+                val pillWidth = 53.dp
+                val targetIndex = years.indexOf(selectedYear)
+                val offset by animateDpAsState(
+                    targetValue = (53 * targetIndex).dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessLow)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .offset(x = offset)
+                        .width(pillWidth)
+                        .fillMaxHeight()
+                        .background(Color(0xFF818CF8), RoundedCornerShape(8.dp))
+                )
+
+                Row(modifier = Modifier.fillMaxSize()) {
+                    years.forEach { year ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    selectedYear = year
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = year,
+                                color = if (selectedYear == year) Color.White else Color.Gray,
+                                fontSize = 10.sp,
+                                fontWeight = if (selectedYear == year) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (selectedYear == "Stats") {
+            // Stats Dashboard stays as is (already high-density)
+            ProductivityStatsView()
+        } else {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                // Expanded Day Labels
+                Column(
+                    modifier = Modifier.width(32.dp).padding(top = 28.dp), 
+                ) {
+                    val dayLabels = listOf("", "Mon", "", "Wed", "", "Fri", "")
+                    dayLabels.forEach { day ->
+                        Box(modifier = Modifier.height(19.dp), contentAlignment = Alignment.CenterStart) {
+                            Text(day, color = Color.Gray, fontSize = 9.sp)
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.width(4.dp))
+                
+                Column(modifier = Modifier.weight(1f).horizontalScroll(scrollState)) {
+                    // Expanded Month Labels
+                    Row(
+                        modifier = Modifier.padding(start = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(78.dp) // Fine-tuned for 15dp blocks + 4dp spacing
+                    ) {
+                        months.forEach { month ->
+                            Text(month, color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    // Balanced Heatmap Grid
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val activityColor = Color(0xFF22C55E)
+                        activityLevels[0].indices.forEach { weekIndex ->
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                activityLevels.forEach { dayRow ->
+                                    val level = dayRow[weekIndex]
+                                    val color = when(level) {
+                                        4 -> activityColor
+                                        3 -> activityColor.copy(alpha = 0.7f)
+                                        2 -> activityColor.copy(alpha = 0.4f)
+                                        1 -> activityColor.copy(alpha = 0.2f)
+                                        else -> Color.White.copy(alpha = 0.05f)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(15.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(color)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.weight(1f))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Less", color = Color.Gray, fontSize = 9.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val activityColor = Color(0xFF22C55E)
+                    repeat(5) { i ->
+                        val color = if (i == 0) Color.White.copy(alpha = 0.05f) 
+                                   else activityColor.copy(alpha = if(i==1) 0.2f else if(i==2) 0.4f else if(i==3) 0.7f else 1.0f)
+                        Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
+                    }
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("More", color = Color.Gray, fontSize = 9.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun ProductivityStatsView() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Hero Progress Card
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White.copy(alpha = 0.04f),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Lifetime Progress", color = Color.Gray, fontSize = 9.sp)
+                    Text("Level 14", color = Color(0xFF818CF8), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(5.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)) {
+                    Box(modifier = Modifier.fillMaxWidth(0.7f).fillMaxHeight().background(Color(0xFF818CF8), CircleShape))
+                }
+            }
+        }
+
+        // Dense Stat Grid
+        val stats = listOf(
+            Triple("Total Work", "1,284", Icons.Default.CheckCircle),
+            Triple("Streak", "12d", Icons.Default.Whatshot),
+            Triple("Avg Daily", "8.4", Icons.Default.Timer),
+            Triple("Best Year", "2025", Icons.Default.EmojiEvents),
+            Triple("Accuracy", "94%", Icons.AutoMirrored.Filled.TrendingUp),
+            Triple("Efficiency", "High", Icons.Default.Speed)
+        )
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                stats.take(3).forEach { (label, value, icon) ->
+                    CompactStatCard(label, value, icon, Color(0xFF818CF8))
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                stats.drop(3).forEach { (label, value, icon) ->
+                    CompactStatCard(label, value, icon, Color(0xFF34D399))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CompactStatCard(label: String, value: String, icon: ImageVector, color: Color) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.White.copy(alpha = 0.04f),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(color.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            
+            Column {
+                Text(text = label, color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                Text(text = value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
