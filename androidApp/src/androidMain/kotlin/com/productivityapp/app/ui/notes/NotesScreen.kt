@@ -1,6 +1,7 @@
 package com.productivityapp.app.ui.notes
 
 import androidx.compose.foundation.background
+import com.productivityapp.model.NoteItem
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells

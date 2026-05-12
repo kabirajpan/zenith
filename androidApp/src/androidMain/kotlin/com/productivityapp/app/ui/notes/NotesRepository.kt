@@ -1,15 +1,8 @@
 package com.productivityapp.app.ui.notes
 
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.ui.graphics.Color
-
-data class NoteItem(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val title: String,
-    val summary: String,
-    val blocks: List<NoteBlock>,
-    val color: Color = Color(0xFF818CF8)
-)
+import com.productivityapp.model.NoteItem
+import com.productivityapp.model.NoteBlock
 
 object NotesRepository {
     val notes = mutableStateListOf<NoteItem>()
@@ -25,7 +18,7 @@ object NotesRepository {
                 blocks = blocks.toList()
             )
         } else {
-            notes.add(0, NoteItem(title = title, summary = summary, blocks = blocks.toList()))
+            notes.add(0, NoteItem(id = java.util.UUID.randomUUID().toString(), title = title, summary = summary, blocks = blocks.toList()))
         }
     }
 }

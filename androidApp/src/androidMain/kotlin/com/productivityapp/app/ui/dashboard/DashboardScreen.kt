@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 
 import com.productivityapp.app.ui.tasks.TaskListScreen
 import com.productivityapp.app.ui.notes.NotesScreen
-import com.productivityapp.app.ui.notes.NoteItem
+import com.productivityapp.model.NoteItem
 import com.productivityapp.app.ui.vault.VaultScreen
 import com.productivityapp.app.ui.alarm.AlarmScreen
 import com.productivityapp.app.ui.notes.NoteEditorScreen
