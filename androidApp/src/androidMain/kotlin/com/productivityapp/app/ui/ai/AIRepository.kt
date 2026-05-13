@@ -6,7 +6,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.productivityapp.app.ui.vault.VaultItem
 
 enum class ActionType {
-    CREATE, TOGGLE, DELETE, CREATE_REMINDER
+    CREATE, TOGGLE, DELETE, CREATE_REMINDER, ADD_NOTE_BLOCK
 }
 
 data class ProposedAction(
@@ -15,7 +15,9 @@ data class ProposedAction(
     val category: String? = null,
     val priority: String? = null,
     val energyLevel: String? = null,
-    val taskId: String? = null
+    val taskId: String? = null,
+    val blockType: String? = null,
+    val blockContent: String? = null
 )
 
 data class ChatMessage(

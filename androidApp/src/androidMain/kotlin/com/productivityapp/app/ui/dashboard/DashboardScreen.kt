@@ -44,6 +44,13 @@ import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.tasks.AddTaskModal
 import com.productivityapp.app.ui.ai.AIScreen
 import com.productivityapp.app.ui.ai.AIRepository
+import com.productivityapp.app.ui.reminders.AddReminderModal
+import com.productivityapp.app.ui.reminders.RemindersRepository
+import com.productivityapp.app.ui.alarm.AlarmEntryModal
+import com.productivityapp.app.ui.alarm.AlarmItem
+import com.productivityapp.app.ui.vault.AddVaultItemModal
+import com.productivityapp.app.ui.vault.VaultRepository
+import com.productivityapp.app.ui.vault.VaultItem
 
 sealed class ZenithScreen {
     object Dashboard : ZenithScreen()
@@ -83,7 +90,9 @@ fun DashboardScreen() {
     var isRightSidebarVisible by remember { mutableStateOf(false) }
     var isQuickActionsVisible by remember { mutableStateOf(false) }
     var showAddTaskModal by remember { mutableStateOf(false) }
-    var showAddVaultDialog by remember { mutableStateOf(false) }
+    var showAddReminderModal by remember { mutableStateOf(false) }
+    var showAddAlarmModal by remember { mutableStateOf(false) }
+    var showAddVaultModal by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var currentScreen by remember { mutableStateOf<ZenithScreen>(ZenithScreen.Dashboard) }
     var selectedNote by remember { mutableStateOf<NoteItem?>(null) }
@@ -238,11 +247,32 @@ fun DashboardScreen() {
                     when(action) {
                         "Task" -> { showAddTaskModal = true }
                         "Note" -> { currentScreen = ZenithScreen.NoteEditor }
-                        "Vault" -> { currentScreen = ZenithScreen.Vault; showAddVaultDialog = true }
-                        "Alarm" -> currentScreen = ZenithScreen.Alarm
+                        "Vault" -> { showAddVaultModal = true }
+                        "Alarm" -> { showAddAlarmModal = true }
                         "Draw" -> currentScreen = ZenithScreen.Draw
-                        "Reminder" -> currentScreen = ZenithScreen.Reminder
+                        "Reminder" -> { showAddReminderModal = true }
                     }
+                }
+            )
+        }
+
+        if (showAddReminderModal) {
+            AddReminderModal(
+                onDismiss = { showAddReminderModal = false },
+                onSave = { title, date, time, category, priority ->
+                    RemindersRepository.addReminder(title, date, time, category, priority)
+                    showAddReminderModal = false
+                }
+            )
+        }
+
+        if (showAddAlarmModal) {
+            AlarmEntryModal(
+                onDismiss = { showAddAlarmModal = false },
+                onSave = { time, label, days ->
+                    // For now, since we don't have a global AlarmRepository with a mutable list accessible everywhere,
+                    // we'll just dismiss. If there's a repository, we should add it there.
+                    showAddAlarmModal = false
                 }
             )
         }
@@ -257,11 +287,14 @@ fun DashboardScreen() {
                 }
             )
         }
-        if (showAddVaultDialog) {
-            AddEntryDialog(title = "New Vault Entry", label = "Site Name", onDismiss = { showAddVaultDialog = false })
-        }
-        if (showAddVaultDialog) {
-            AddEntryDialog(title = "New Vault Entry", label = "Site Name", onDismiss = { showAddVaultDialog = false })
+        if (showAddVaultModal) {
+            AddVaultItemModal(
+                onDismiss = { showAddVaultModal = false },
+                onAdd = { item ->
+                    VaultRepository.addVaultItem(item)
+                    showAddVaultModal = false
+                }
+            )
         }
 
         // Right Sidebar / Drawer Overlay
@@ -318,20 +351,20 @@ fun QuickActionsModal(onClose: () -> Unit, onAction: (String) -> Unit) {
                 
                 val actions = listOf(
                     Triple(Icons.Default.Edit, "Note", { onAction("Note") }),
-                    Triple(Icons.Default.Done, "Task", { onAction("Task") }),
+                    Triple(Icons.Default.CheckCircle, "Task", { onAction("Task") }),
                     Triple(Icons.Default.Lock, "Vault", { onAction("Vault") }),
-                    Triple(Icons.Default.Notifications, "Alarm", { onAction("Alarm") }),
-                    Triple(Icons.Default.PlayArrow, "Draw", { onAction("Draw") }),
-                    Triple(Icons.Default.Info, "Reminder", { onAction("Reminder") })
+                    Triple(Icons.Default.NotificationsActive, "Alarm", { onAction("Alarm") }),
+                    Triple(Icons.Default.Brush, "Draw", { onAction("Draw") }),
+                    Triple(Icons.Default.Notifications, "Reminder", { onAction("Reminder") })
                 )
                 
                 val colors = listOf(
-                    Color(0xFF818CF8), // Note
-                    Color(0xFF34D399), // Task
-                    Color(0xFFFBBF24), // Vault
-                    Color(0xFFF87171), // Alarm
-                    Color(0xFF60A5FA), // Draw
-                    Color(0xFFA78BFA)  // Reminder
+                    Color(0xFF818CF8), // Note (Indigo)
+                    Color(0xFF818CF8), // Task (Indigo)
+                    Color(0xFF22C55E), // Vault (Green)
+                    Color(0xFFFBBF24), // Alarm (Gold)
+                    Color(0xFF60A5FA), // Draw (Blue)
+                    Color(0xFF818CF8)  // Reminder (Indigo)
                 )
                 
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {

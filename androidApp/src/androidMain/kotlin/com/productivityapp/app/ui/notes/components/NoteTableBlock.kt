@@ -78,13 +78,19 @@ fun NoteTableBlock(
         }
 
         data.forEachIndexed { rowIndex, row ->
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val isHeader = rowIndex == 0
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (isHeader) Color.White.copy(alpha = 0.05f) else Color.Transparent)
+                    .border(0.2.dp, Color.White.copy(alpha = 0.05f)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 row.forEachIndexed { colIndex, cell ->
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .border(0.5.dp, Color.White.copy(alpha = 0.1f))
-                            .padding(8.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         BasicTextField(
                             value = cell,
@@ -95,7 +101,11 @@ fun NoteTableBlock(
                                 }
                                 onDataChange(newData)
                             },
-                            textStyle = TextStyle(color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp),
+                            textStyle = TextStyle(
+                                color = if (isHeader) Color.White else Color.White.copy(alpha = 0.8f),
+                                fontSize = 14.sp,
+                                fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal
+                            ),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -106,6 +116,13 @@ fun NoteTableBlock(
                                     } else false
                                 }
                         )
+                        if (cell.isEmpty()) {
+                            Text(
+                                if (isHeader) "Header" else "Value",
+                                color = Color.White.copy(alpha = 0.2f),
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
                 
