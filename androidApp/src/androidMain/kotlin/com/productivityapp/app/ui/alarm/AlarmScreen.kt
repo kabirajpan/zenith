@@ -42,13 +42,7 @@ fun AlarmScreen() {
     var showAddModal by remember { mutableStateOf(false) }
     var alarmToEdit by remember { mutableStateOf<AlarmItem?>(null) }
     
-    val alarms = remember {
-        mutableStateListOf(
-            AlarmItem(1, "07:00 AM", "Work Morning", listOf("Mo", "Tu", "We", "Th", "Fr"), true),
-            AlarmItem(2, "08:30 AM", "Weekend Wakeup", listOf("Sa", "Su"), false),
-            AlarmItem(3, "10:00 PM", "Night Routine", listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"), true)
-        )
-    }
+    val alarms = remember { mutableStateListOf<AlarmItem>() }
 
     val filteredAlarms by remember(searchQuery, selectedCategory) {
         derivedStateOf {

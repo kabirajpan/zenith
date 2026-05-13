@@ -14,12 +14,7 @@ data class ReminderItem(
 )
 
 object RemindersRepository {
-    private val _reminders = mutableStateListOf<ReminderItem>(
-        ReminderItem(title = "Morning Standup", date = "Today", time = "09:00 AM", category = "Work", priority = "High"),
-        ReminderItem(title = "Gym Session", date = "Today", time = "06:00 PM", category = "Health", priority = "Medium"),
-        ReminderItem(title = "Buy Groceries", date = "Tomorrow", time = "10:00 AM", category = "Personal", priority = "Low"),
-        ReminderItem(title = "Project Deadline", date = "May 20", time = "11:59 PM", category = "Work", priority = "High")
-    )
+    private val _reminders = mutableStateListOf<ReminderItem>()
     val reminders: List<ReminderItem> get() = _reminders
 
     fun addReminder(title: String, date: String, time: String, category: String, priority: String) {

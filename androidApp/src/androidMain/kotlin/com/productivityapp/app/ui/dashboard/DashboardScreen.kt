@@ -55,6 +55,24 @@ sealed class ZenithScreen {
     object Settings : ZenithScreen()
 }
 
+object ProductivityTracker {
+    val completionMap = mutableStateMapOf<java.time.LocalDate, Int>()
+
+    fun recordCompletion(date: java.time.LocalDate = java.time.LocalDate.now()) {
+        val current = completionMap[date] ?: 0
+        completionMap[date] = current + 1
+    }
+
+    fun removeCompletion(date: java.time.LocalDate = java.time.LocalDate.now()) {
+        val current = completionMap[date] ?: 0
+        if (current > 0) completionMap[date] = current - 1
+    }
+
+    fun getCompletionsForDate(date: java.time.LocalDate): Int {
+        return completionMap[date] ?: 0
+    }
+}
+
 @Composable
 fun DashboardScreen() {
     val scaffoldState = rememberScaffoldState()
@@ -575,12 +593,60 @@ fun MainContent() {
         
         Spacer(modifier = Modifier.height(10.dp))
         
-        repeat(4) { index ->
-            TaskItemPlaceholder(index)
-            Spacer(modifier = Modifier.height(6.dp))
+        val tasks = com.productivityapp.app.ui.tasks.TasksRepository.tasks
+        if (tasks.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .background(Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Gray.copy(alpha = 0.2f), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("No tasks for today", color = Color.Gray.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                tasks.take(3).forEach { task ->
+                    DashboardTaskRow(task)
+                }
+            }
         }
-        
-        Spacer(modifier = Modifier.height(80.dp))
+    }
+}
+
+@Composable
+fun DashboardTaskRow(task: com.productivityapp.app.ui.tasks.TaskItem) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(16.dp)
+                .clip(CircleShape)
+                .background(if (task.isCompleted) Color(0xFF818CF8) else Color.Transparent)
+                .border(1.dp, if (task.isCompleted) Color(0xFF818CF8) else Color.Gray.copy(alpha = 0.3f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (task.isCompleted) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = task.title, 
+            color = if (task.isCompleted) Color.Gray else Color.White, 
+            fontSize = 13.sp, 
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+        Text(task.category, color = Color(0xFF818CF8).copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -644,7 +710,10 @@ fun CalendarSection() {
             }
             
             Text(
-                if (pagerState.currentPage == 0) "May 2026" else "Activity Heatmap", 
+                if (pagerState.currentPage == 0) {
+                    val now = java.time.LocalDate.now()
+                    "${now.month.name.lowercase().capitalize()} ${now.year}"
+                } else "Activity Heatmap", 
                 color = Color.White.copy(alpha = 0.4f), 
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold
@@ -677,6 +746,15 @@ fun CalendarSection() {
 
 @Composable
 fun HorizontalCalendar() {
+    val now = java.time.LocalDate.now()
+    val yearMonth = java.time.YearMonth.from(now)
+    val firstDayOfMonth = yearMonth.atDay(1)
+    val daysInMonth = yearMonth.lengthOfMonth()
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // Sunday = 0, Monday = 1...
+    
+    // Convert to Monday start for our UI (Mo=0, Tu=1... Su=6)
+    val startOffset = (firstDayOfMonth.dayOfWeek.value - 1 + 7) % 7
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -684,28 +762,32 @@ fun HorizontalCalendar() {
         ) {
             val days = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
             days.forEach { day ->
-                Text(day, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.width(32.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(day, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.width(34.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        // Month Grid
-        val weeks = listOf(
-            listOf("", "", "", "", 1, 2, 3),
-            listOf(4, 5, 6, 7, 8, 9, 10),
-            listOf(11, 12, 13, 14, 15, 16, 17),
-            listOf(18, 19, 20, 21, 22, 23, 24),
-            listOf(25, 26, 27, 28, 29, 30, 31)
-        )
+        // Dynamic Grid
+        var dateCounter = 1
+        val rows = 6
+        val cols = 7
         
-        weeks.forEach { week ->
+        for (i in 0 until rows) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                week.forEach { date ->
-                    val isToday = date == 11
+                for (j in 0 until cols) {
+                    val dayIndex = i * cols + j
+                    val dateValue = if (dayIndex < startOffset || dateCounter > daysInMonth) {
+                        null
+                    } else {
+                        dateCounter++
+                    }
+                    
+                    val isToday = dateValue == now.dayOfMonth && now.month == yearMonth.month && now.year == yearMonth.year
+                    
                     Box(
                         modifier = Modifier
                             .size(34.dp)
@@ -713,15 +795,18 @@ fun HorizontalCalendar() {
                             .background(if (isToday) Color(0xFF818CF8) else Color.Transparent),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = date.toString(),
-                            color = if (isToday) Color.White else if (date == "") Color.Transparent else Color.White.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
-                        )
+                        if (dateValue != null) {
+                            Text(
+                                text = dateValue.toString(),
+                                color = if (isToday) Color.White else Color.White.copy(alpha = 0.8f),
+                                fontSize = 12.sp,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }
+            if (dateCounter > daysInMonth && i >= 4) break // Skip last row if month ended
             Spacer(modifier = Modifier.height(6.dp))
         }
     }
@@ -732,9 +817,9 @@ fun ActivityHeatmap() {
     var selectedYear by remember { mutableStateOf("2026") }
     val years = listOf("2024", "2025", "2026", "Stats")
     
-    val activityLevels = remember(selectedYear) {
-        List(7) { List(53) { (0..4).random() } }
-    }
+    // In a real app, this would come from a database/repository
+    // For now, we simulate with a map of dates to completion counts
+    val taskCompletions = remember { mutableStateMapOf<java.time.LocalDate, Int>() }
     
     val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     val scrollState = rememberScrollState()
@@ -748,54 +833,29 @@ fun ActivityHeatmap() {
     Column(modifier = Modifier.fillMaxSize()) {
         // High-Fidelity Year Switcher (Pill Style)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(10.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(30.dp)
-                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
-                    .padding(3.dp)
-            ) {
-                val pillWidth = 53.dp
-                val targetIndex = years.indexOf(selectedYear)
-                val offset by animateDpAsState(
-                    targetValue = (53 * targetIndex).dp,
-                    animationSpec = spring(stiffness = Spring.StiffnessLow)
-                )
-
+            years.forEach { year ->
+                val isSelected = selectedYear == year
                 Box(
                     modifier = Modifier
-                        .offset(x = offset)
-                        .width(pillWidth)
-                        .fillMaxHeight()
-                        .background(Color(0xFF818CF8), RoundedCornerShape(8.dp))
-                )
-
-                Row(modifier = Modifier.fillMaxSize()) {
-                    years.forEach { year ->
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    selectedYear = year
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = year,
-                                color = if (selectedYear == year) Color.White else Color.Gray,
-                                fontSize = 10.sp,
-                                fontWeight = if (selectedYear == year) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                    }
+                        .weight(1f)
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(if (isSelected) Color(0xFFF97316).copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { selectedYear = year },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = year,
+                        color = if (isSelected) Color(0xFFF97316) else Color.Gray,
+                        fontSize = 10.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
                 }
             }
         }
@@ -803,56 +863,50 @@ fun ActivityHeatmap() {
         Spacer(modifier = Modifier.height(16.dp))
         
         if (selectedYear == "Stats") {
-            // Stats Dashboard stays as is (already high-density)
-            ProductivityStatsView()
+            HeatmapStats()
         } else {
             Row(modifier = Modifier.fillMaxWidth()) {
-                // Expanded Day Labels
+                // Fixed Day Labels
                 Column(
-                    modifier = Modifier.width(32.dp).padding(top = 28.dp), 
+                    modifier = Modifier.padding(top = 22.dp, end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp) // Fine-tuned for 14dp squares + 4dp spacing
                 ) {
-                    val dayLabels = listOf("", "Mon", "", "Wed", "", "Fri", "")
-                    dayLabels.forEach { day ->
-                        Box(modifier = Modifier.height(19.dp), contentAlignment = Alignment.CenterStart) {
-                            Text(day, color = Color.Gray, fontSize = 9.sp)
+                    listOf("", "Mon", "", "Wed", "", "Fri", "").forEach { day ->
+                        Box(modifier = Modifier.height(14.dp), contentAlignment = Alignment.CenterStart) {
+                            Text(day, color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.width(4.dp))
-                
+
                 Column(modifier = Modifier.weight(1f).horizontalScroll(scrollState)) {
-                    // Expanded Month Labels
-                    Row(
-                        modifier = Modifier.padding(start = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(78.dp) // Fine-tuned for 15dp blocks + 4dp spacing
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                         months.forEach { month ->
-                            Text(month, color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                            Text(month, color = Color.Gray, fontSize = 9.sp)
                         }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                     
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    // Balanced Heatmap Grid
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        val activityColor = Color(0xFF22C55E)
-                        activityLevels[0].indices.forEach { weekIndex ->
+                        // 53 weeks
+                        val now = java.time.LocalDate.now()
+                        for (week in 0 until 53) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                activityLevels.forEach { dayRow ->
-                                    val level = dayRow[weekIndex]
-                                    val color = when(level) {
-                                        4 -> activityColor
-                                        3 -> activityColor.copy(alpha = 0.7f)
-                                        2 -> activityColor.copy(alpha = 0.4f)
-                                        1 -> activityColor.copy(alpha = 0.2f)
-                                        else -> Color.White.copy(alpha = 0.05f)
+                                for (day in 0 until 7) {
+                                    val daysToSubtract = (52 - week) * 7 + (6 - day)
+                                    val date = now.minusDays(daysToSubtract.toLong())
+                                    val completions = ProductivityTracker.getCompletionsForDate(date)
+                                    
+                                    val color = when {
+                                        completions == 0 -> Color.White.copy(alpha = 0.05f)
+                                        completions == 1 -> Color(0xFFF97316).copy(alpha = 0.2f)
+                                        completions == 2 -> Color(0xFFF97316).copy(alpha = 0.4f)
+                                        completions == 3 -> Color(0xFFF97316).copy(alpha = 0.7f)
+                                        else -> Color(0xFFF97316)
                                     }
                                     Box(
                                         modifier = Modifier
-                                            .size(15.dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(color)
+                                            .size(14.dp)
+                                            .background(color, RoundedCornerShape(3.dp))
                                     )
                                 }
                             }
@@ -860,28 +914,28 @@ fun ActivityHeatmap() {
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.weight(1f))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Less", color = Color.Gray, fontSize = 9.sp)
-                Spacer(modifier = Modifier.width(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val activityColor = Color(0xFF22C55E)
-                    repeat(5) { i ->
-                        val color = if (i == 0) Color.White.copy(alpha = 0.05f) 
-                                   else activityColor.copy(alpha = if(i==1) 0.2f else if(i==2) 0.4f else if(i==3) 0.7f else 1.0f)
-                        Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
-                    }
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("More", color = Color.Gray, fontSize = 9.sp)
-            }
         }
+    }
+}
+
+@Composable
+fun HeatmapStats() {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatRow("Total Tasks Done", "124", Color(0xFFF97316))
+        StatRow("Daily Average", "4.2", Color(0xFFF97316).copy(alpha = 0.6f))
+        StatRow("Best Streak", "12 Days", Color(0xFF22C55E))
+    }
+}
+
+@Composable
+fun StatRow(label: String, value: String, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Color.Gray, fontSize = 12.sp)
+        Text(value, color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1056,6 +1110,8 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
         Spacer(modifier = Modifier.weight(1f))
         
         SidebarItem(Icons.Default.Settings, "Settings", currentScreen == ZenithScreen.Settings) { onNavigate(ZenithScreen.Settings) }
+        Spacer(modifier = Modifier.navigationBarsPadding())
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

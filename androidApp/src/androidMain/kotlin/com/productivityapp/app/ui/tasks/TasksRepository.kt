@@ -1,6 +1,7 @@
 package com.productivityapp.app.ui.tasks
 
 import androidx.compose.runtime.mutableStateListOf
+import com.productivityapp.app.ui.reminders.RemindersRepository
 
 data class TaskItem(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -21,12 +22,29 @@ object TasksRepository {
             priority = priority,
             category = category
         ))
+        
+        // Intelligent Alarm-Reminder Nexus
+        RemindersRepository.addReminder(
+            title = "Task: $title",
+            date = "Today",
+            time = "Soon",
+            category = category,
+            priority = priority
+        )
     }
     
     fun toggleTask(id: String) {
         val index = tasks.indexOfFirst { it.id == id }
         if (index != -1) {
-            tasks[index] = tasks[index].copy(isCompleted = !tasks[index].isCompleted)
+            val isNowCompleted = !tasks[index].isCompleted
+            tasks[index] = tasks[index].copy(isCompleted = isNowCompleted)
+            
+            // Sync with Heatmap Tracker
+            if (isNowCompleted) {
+                com.productivityapp.app.ui.dashboard.ProductivityTracker.recordCompletion()
+            } else {
+                com.productivityapp.app.ui.dashboard.ProductivityTracker.removeCompletion()
+            }
         }
     }
     
