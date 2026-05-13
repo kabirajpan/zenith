@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
@@ -22,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun NotesScreen(onNoteClick: (NoteItem) -> Unit) {
+fun NotesScreen(onNoteClick: (NoteItem) -> Unit, onAddClick: () -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = listOf("All", "Personal", "Work", "Ideas")
@@ -60,6 +61,15 @@ fun NotesScreen(onNoteClick: (NoteItem) -> Unit) {
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+            IconButton(onClick = onAddClick) {
+                androidx.compose.material.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Add,
+                    contentDescription = "Add Note",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }

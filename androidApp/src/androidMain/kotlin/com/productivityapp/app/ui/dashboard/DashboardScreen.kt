@@ -2,7 +2,9 @@ package com.productivityapp.app.ui.dashboard
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 import com.productivityapp.app.ui.tasks.TaskListScreen
+import com.productivityapp.app.ui.reminders.ReminderScreen
 import com.productivityapp.app.ui.notes.NotesScreen
 import com.productivityapp.model.NoteItem
 import com.productivityapp.app.ui.vault.VaultScreen
@@ -63,6 +66,8 @@ fun DashboardScreen() {
     var searchQuery by remember { mutableStateOf("") }
     var currentScreen by remember { mutableStateOf<ZenithScreen>(ZenithScreen.Dashboard) }
     var selectedNote by remember { mutableStateOf<NoteItem?>(null) }
+    // Custom Drawer State
+    var isLeftSidebarVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -77,21 +82,12 @@ fun DashboardScreen() {
         
         Scaffold(
             scaffoldState = scaffoldState,
-            drawerContent = {
-                LeftSidebarContent(
-                    onNavigate = { screen ->
-                        currentScreen = screen
-                        scope.launch { scaffoldState.drawerState.close() }
-                    }
-                )
-            },
-            drawerBackgroundColor = Color(0xFF0F172A),
             topBar = {
                 if (!isEditor) {
                     ZenithTopBar(
                         searchQuery = searchQuery,
                         onSearchQueryChange = { searchQuery = it },
-                        onMenuClick = { scope.launch { scaffoldState.drawerState.open() } },
+                        onMenuClick = { isLeftSidebarVisible = true },
                         onUserClick = { isRightSidebarVisible = true }
                     )
                 }
@@ -110,7 +106,7 @@ fun DashboardScreen() {
                                 0 -> ZenithScreen.Dashboard
                                 1 -> ZenithScreen.Tasks
                                 3 -> ZenithScreen.Settings
-                                else -> ZenithScreen.Dashboard
+                                else -> currentScreen
                             }
                         }
                     )
@@ -139,10 +135,16 @@ fun DashboardScreen() {
                     ZenithScreen.Dashboard -> MainContent()
                     ZenithScreen.Tasks -> TaskListScreen()
                     ZenithScreen.Vault -> VaultScreen()
-                    ZenithScreen.Notes -> NotesScreen(onNoteClick = { 
-                        selectedNote = it
-                        currentScreen = ZenithScreen.NoteEditor
-                    })
+                    ZenithScreen.Notes -> NotesScreen(
+                        onNoteClick = { 
+                            selectedNote = it
+                            currentScreen = ZenithScreen.NoteEditor
+                        },
+                        onAddClick = {
+                            selectedNote = null
+                            currentScreen = ZenithScreen.NoteEditor
+                        }
+                    )
                     ZenithScreen.NoteEditor -> NoteEditorScreen(
                         initialNote = selectedNote,
                         onBack = { 
@@ -152,8 +154,52 @@ fun DashboardScreen() {
                     )
                     ZenithScreen.Alarm -> AlarmScreen()
                     ZenithScreen.Draw -> PlaceholderScreen("Draw")
-                    ZenithScreen.Reminder -> PlaceholderScreen("Reminder")
+                    ZenithScreen.Reminder -> ReminderScreen()
                     ZenithScreen.Settings -> PlaceholderScreen("Settings")
+                }
+            }
+        }
+        
+        // Custom Left Sidebar Overlay (Refined Layered Animation)
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 1. Scrim (Fades in place)
+            AnimatedVisibility(
+                visible = isLeftSidebarVisible,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { isLeftSidebarVisible = false }
+                )
+            }
+
+            // 2. Sidebar Panel (Slides in)
+            AnimatedVisibility(
+                visible = isLeftSidebarVisible,
+                enter = slideInHorizontally(initialOffsetX = { -it }),
+                exit = slideOutHorizontally(targetOffsetX = { -it })
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(260.dp),
+                    color = Color(0xFF0F172A),
+                    elevation = 16.dp,
+                    shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+                ) {
+                    LeftSidebarContent(
+                        currentScreen = currentScreen,
+                        onNavigate = { screen ->
+                            currentScreen = screen
+                            isLeftSidebarVisible = false
+                        }
+                    )
                 }
             }
         }
@@ -217,58 +263,75 @@ fun DashboardScreen() {
 
 @Composable
 fun QuickActionsModal(onClose: () -> Unit, onAction: (String) -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
-            .clickable { onClose() },
-        contentAlignment = Alignment.BottomCenter
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1E293B), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .padding(24.dp)
-                .clickable(enabled = false) {}
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.80f),
+            color = Color(0xFF0F172A),
+            shape = RoundedCornerShape(24.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
-            Text("Create New", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            val actions = listOf(
-                Triple(Icons.Default.Edit, "Note", { onAction("Note") }),
-                Triple(Icons.Default.Done, "Task", { onAction("Task") }),
-                Triple(Icons.Default.Lock, "Vault", { onAction("Vault") }),
-                Triple(Icons.Default.PlayArrow, "Draw", { onAction("Draw") }),
-                Triple(Icons.Default.Notifications, "Alarm", { onAction("Alarm") }),
-                Triple(Icons.Default.Info, "Reminder", { onAction("Reminder") }),
-                Triple(Icons.Default.Star, "AI Coach", { onClose() })
-            )
-            
-            val colors = listOf(Color(0xFFF87171), Color(0xFF60A5FA), Color(0xFFFBBF24), Color(0xFF34D399), Color(0xFFA78BFA), Color(0xFFFB7185), Color(0xFF818CF8))
-            
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                val chunks = actions.chunked(3)
-                for (i in chunks.indices) {
-                    val rowActions = chunks[i]
-                    val rowColors = colors.drop(i * 3).take(rowActions.size)
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        for (j in rowActions.indices) {
-                            val action = rowActions[j]
-                            val color = rowColors[j]
-                            ActionItem(action.first, action.second, color, action.third)
-                        }
-                        if (rowActions.size < 3) {
-                            repeat(3 - rowActions.size) { Spacer(modifier = Modifier.width(80.dp)) }
+            Column(
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(Color(0xFF818CF8), CircleShape))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Create New", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                val actions = listOf(
+                    Triple(Icons.Default.Edit, "Note", { onAction("Note") }),
+                    Triple(Icons.Default.Done, "Task", { onAction("Task") }),
+                    Triple(Icons.Default.Lock, "Vault", { onAction("Vault") }),
+                    Triple(Icons.Default.Notifications, "Alarm", { onAction("Alarm") }),
+                    Triple(Icons.Default.PlayArrow, "Draw", { onAction("Draw") }),
+                    Triple(Icons.Default.Info, "Reminder", { onAction("Reminder") })
+                )
+                
+                val colors = listOf(
+                    Color(0xFF818CF8), // Note
+                    Color(0xFF34D399), // Task
+                    Color(0xFFFBBF24), // Vault
+                    Color(0xFFF87171), // Alarm
+                    Color(0xFF60A5FA), // Draw
+                    Color(0xFFA78BFA)  // Reminder
+                )
+                
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val chunks = actions.chunked(3)
+                    chunks.forEachIndexed { i, rowActions ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            rowActions.forEachIndexed { j, action ->
+                                val color = colors[i * 3 + j]
+                                ActionItem(action.first, action.second, color, action.third)
+                            }
+                            if (rowActions.size < 3) {
+                                repeat(3 - rowActions.size) { Spacer(modifier = Modifier.width(70.dp)) }
+                            }
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.White.copy(alpha = 0.05f)),
+                    shape = RoundedCornerShape(10.dp),
+                    elevation = null
+                ) {
+                    Text("Cancel", color = Color.Gray, fontSize = 12.sp)
+                }
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -908,26 +971,91 @@ fun CompactStatCard(label: String, value: String, icon: ImageVector, color: Colo
 }
 
 @Composable
-fun LeftSidebarContent(onNavigate: (ZenithScreen) -> Unit) {
+fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(240.dp)
+            .width(260.dp)
             .background(Color(0xFF0F172A))
-            .padding(20.dp)
+            .padding(horizontal = 8.dp)
     ) {
-        Text("Zenith", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.statusBarsPadding())
+        Spacer(modifier = Modifier.height(16.dp))
         
-        SidebarItem(Icons.Default.Home, "Dashboard") { onNavigate(ZenithScreen.Dashboard) }
-        SidebarItem(Icons.Default.Done, "Tasks") { onNavigate(ZenithScreen.Tasks) }
-        SidebarItem(Icons.Default.Edit, "Notes") { onNavigate(ZenithScreen.Notes) }
-        SidebarItem(Icons.Default.Lock, "Secure Vault") { onNavigate(ZenithScreen.Vault) }
-        SidebarItem(Icons.Default.Notifications, "Alarms") { onNavigate(ZenithScreen.Alarm) }
+        // Compact Zenith Brand Header
+        Row(
+            modifier = Modifier.padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.size(28.dp).background(Color(0xFF818CF8), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Text("Zenith", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp)
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Separate Style for Dashboard
+        val isDashboard = currentScreen == ZenithScreen.Dashboard
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    if (isDashboard) Brush.horizontalGradient(listOf(Color(0xFF818CF8).copy(alpha = 0.2f), Color(0xFF818CF8).copy(alpha = 0.05f)))
+                    else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.03f), Color.White.copy(alpha = 0.03f)))
+                )
+                .border(
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isDashboard) Color(0xFF818CF8).copy(alpha = 0.3f) else Color.Transparent
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .clickable { onNavigate(ZenithScreen.Dashboard) }
+                .padding(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Dashboard, 
+                    contentDescription = null, 
+                    tint = if (isDashboard) Color(0xFF818CF8) else Color.Gray,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        "Dashboard", 
+                        color = Color.White, 
+                        fontSize = 14.sp, 
+                        fontWeight = if (isDashboard) FontWeight.Bold else FontWeight.Medium
+                    )
+                    Text("System Overview", color = Color.Gray, fontSize = 9.sp)
+                }
+                if (isDashboard) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    Box(modifier = Modifier.size(5.dp).background(Color(0xFF818CF8), CircleShape))
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text("MODULES", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SidebarItem(Icons.Default.Done, "Tasks", currentScreen == ZenithScreen.Tasks) { onNavigate(ZenithScreen.Tasks) }
+            SidebarItem(Icons.Default.Edit, "Notes", currentScreen == ZenithScreen.Notes) { onNavigate(ZenithScreen.Notes) }
+            SidebarItem(Icons.Default.Lock, "Secure Vault", currentScreen == ZenithScreen.Vault) { onNavigate(ZenithScreen.Vault) }
+            SidebarItem(Icons.Default.Notifications, "Alarms", currentScreen == ZenithScreen.Alarm) { onNavigate(ZenithScreen.Alarm) }
+            SidebarItem(Icons.Default.Schedule, "Reminders", currentScreen == ZenithScreen.Reminder) { onNavigate(ZenithScreen.Reminder) }
+        }
         
         Spacer(modifier = Modifier.weight(1f))
         
-        SidebarItem(Icons.Default.Settings, "Settings") { onNavigate(ZenithScreen.Settings) }
+        SidebarItem(Icons.Default.Settings, "Settings", currentScreen == ZenithScreen.Settings) { onNavigate(ZenithScreen.Settings) }
     }
 }
 
@@ -970,24 +1098,40 @@ fun RightSidebarContent(onClose: () -> Unit) {
         
         Text("STATS", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
-        SidebarItem(Icons.Default.Star, "Achievements") { /* Action */ }
-        SidebarItem(Icons.Default.Settings, "Account Settings") { /* Action */ }
+        SidebarItem(Icons.Default.Star, "Achievements", false) { /* Action */ }
+        SidebarItem(Icons.Default.Settings, "Account Settings", false) { /* Action */ }
     }
 }
 
 @Composable
-fun SidebarItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+fun SidebarItem(icon: ImageVector, label: String, isActive: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
+            .background(if (isActive) Color(0xFF818CF8).copy(alpha = 0.08f) else Color.Transparent)
             .clickable { onClick() }
             .padding(vertical = 12.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+        Icon(
+            icon, 
+            contentDescription = null, 
+            tint = if (isActive) Color(0xFF818CF8) else Color.Gray.copy(alpha = 0.6f), 
+            modifier = Modifier.size(20.dp)
+        )
         Spacer(modifier = Modifier.width(16.dp))
-        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(
+            label, 
+            color = if (isActive) Color.White else Color.Gray, 
+            fontSize = 14.sp, 
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
+        )
+        
+        if (isActive) {
+            Spacer(modifier = Modifier.weight(1f))
+            Box(modifier = Modifier.size(4.dp, 4.dp).background(Color(0xFF818CF8), CircleShape))
+        }
     }
 }
 

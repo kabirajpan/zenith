@@ -222,16 +222,19 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
     var category by remember { mutableStateOf("Social") }
     val categories = listOf("Social", "Work", "Finance")
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(0.80f),
             color = Color(0xFF0F172A),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(Color(0xFF22C55E), CircleShape))
@@ -291,10 +294,19 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
                             }
                         },
                         modifier = Modifier.weight(0.6f),
-                        colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF22C55E)),
-                        shape = RoundedCornerShape(10.dp)
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFF22C55E),
+                            disabledBackgroundColor = Color(0xFF22C55E)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = site.isNotBlank() && username.isNotBlank()
                     ) {
-                        Text("Save Entry", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Save Entry", 
+                            color = if (site.isNotBlank() && username.isNotBlank()) Color.White else Color.White.copy(alpha = 0.5f), 
+                            fontSize = 12.sp, 
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

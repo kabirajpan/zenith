@@ -1,13 +1,16 @@
 package com.productivityapp.app.ui.tasks
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -29,103 +32,142 @@ fun AddTaskModal(initialCategory: String, onDismiss: () -> Unit, onTaskCreated: 
         focusRequester.requestFocus()
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1E293B), RoundedCornerShape(28.dp))
-                .padding(24.dp)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.80f),
+            color = Color(0xFF0F172A),
+            shape = RoundedCornerShape(24.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
-            Text("Create New Task", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                placeholder = { Text("What's on your mind?", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = Color(0xFF818CF8),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
-                    backgroundColor = Color.White.copy(alpha = 0.03f),
-                    textColor = Color.White
-                ),
-                shape = RoundedCornerShape(16.dp)
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(Color(0xFF818CF8), CircleShape))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("New Task", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                
+                TaskInputField(
+                    label = "What's on your mind?",
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.focusRequester(focusRequester)
+                )
+                
+                // Category Selection
+                Column {
+                    Text("Category", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Work", "Personal", "Health").forEach { cat ->
+                            val isSelected = selectedCategory == cat
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) Color(0xFF818CF8).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                    .border(if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.5f)) else androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(10.dp))
+                                    .clickable { selectedCategory = cat }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    cat, 
+                                    color = if (isSelected) Color(0xFF818CF8) else Color.Gray,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Priority Selection
+                Column {
+                    Text("Priority", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Low", "Medium", "High").forEach { prio ->
+                            val isSelected = selectedPriority == prio
+                            val color = when(prio) {
+                                "High" -> Color(0xFFF87171)
+                                "Medium" -> Color(0xFFFBBF24)
+                                else -> Color(0xFF34D399)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                    .border(if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)) else androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(10.dp))
+                                    .clickable { selectedPriority = prio }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    prio, 
+                                    color = if (isSelected) color else Color.Gray,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(0.4f),
+                        colors = ButtonDefaults.buttonColors(backgroundColor = Color.White.copy(alpha = 0.05f)),
+                        shape = RoundedCornerShape(10.dp),
+                        elevation = null
+                    ) {
+                        Text("Cancel", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { if (title.isNotBlank()) onTaskCreated(title, selectedCategory, selectedPriority) },
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFF818CF8),
+                            disabledBackgroundColor = Color(0xFF818CF8)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = title.isNotBlank(),
+                        modifier = Modifier.weight(0.6f)
+                    ) {
+                        Text(
+                            "Create Task", 
+                            color = if (title.isNotBlank()) Color.White else Color.White.copy(alpha = 0.5f), 
+                            fontSize = 12.sp, 
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TaskInputField(label: String, value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White.copy(alpha = 0.04f),
+            shape = RoundedCornerShape(10.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.03f))
+        ) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 13.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF818CF8)),
+                modifier = modifier.padding(12.dp).fillMaxWidth()
             )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Category Selection
-            Text("Category", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Work", "Personal", "Health").forEach { cat ->
-                    val isSelected = selectedCategory == cat
-                    Surface(
-                        color = if (isSelected) Color(0xFF818CF8) else Color.White.copy(alpha = 0.05f),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.clickable { selectedCategory = cat }
-                    ) {
-                        Text(
-                            cat, 
-                            color = if (isSelected) Color.White else Color.Gray,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            // Priority Selection
-            Text("Priority", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Low", "Medium", "High").forEach { prio ->
-                    val isSelected = selectedPriority == prio
-                    val color = when(prio) {
-                        "High" -> Color(0xFFF87171)
-                        "Medium" -> Color(0xFFFBBF24)
-                        else -> Color(0xFF34D399)
-                    }
-                    Surface(
-                        color = if (isSelected) color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, color) else null,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.clickable { selectedPriority = prio }
-                    ) {
-                        Text(
-                            prio, 
-                            color = if (isSelected) color else Color.Gray,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Cancel", color = Color.Gray)
-                }
-                Button(
-                    onClick = { if (title.isNotBlank()) onTaskCreated(title, selectedCategory, selectedPriority) },
-                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF818CF8)),
-                    shape = RoundedCornerShape(14.dp),
-                    enabled = title.isNotBlank(),
-                    modifier = Modifier.weight(1.5f).height(48.dp)
-                ) {
-                    Text("Create Task", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            }
         }
     }
 }
