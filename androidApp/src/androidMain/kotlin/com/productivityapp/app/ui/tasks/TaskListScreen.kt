@@ -21,22 +21,28 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.productivityapp.app.ui.notes.components.ToolButton
 
 @Composable
 fun TaskListScreen() {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf("All", "Work", "Personal", "Health")
+    val categories = listOf("All", "Work", "Personal", "Finance", "Social", "Health", "Travel")
     
     val tasks = TasksRepository.tasks
     var showAddTaskModal by remember { mutableStateOf(false) }
+    var selectedTaskForDetail by remember { mutableStateOf<TaskItem?>(null) }
+    var taskToEdit by remember { mutableStateOf<TaskItem?>(null) }
 
-    val filteredTasks = remember(searchQuery, selectedCategory, tasks.size) {
-        tasks.filter { task ->
-            val matchesSearch = task.title.contains(searchQuery, ignoreCase = true)
-            val matchesCategory = selectedCategory == "All" || task.category == selectedCategory
-            matchesSearch && matchesCategory
+    val filteredTasks by remember(searchQuery, selectedCategory) {
+        derivedStateOf {
+            tasks.filter { task ->
+                val matchesSearch = task.title.contains(searchQuery, ignoreCase = true)
+                val matchesCategory = selectedCategory == "All" || task.category == selectedCategory
+                matchesSearch && matchesCategory
+            }
         }
     }
 
@@ -103,9 +109,9 @@ fun TaskListScreen() {
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        // Compact Categories
+        // Compact Categories (Scrollable)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             categories.forEach { category ->
@@ -139,7 +145,8 @@ fun TaskListScreen() {
                 TaskCard(
                     task = task,
                     onToggle = { TasksRepository.toggleTask(task.id) },
-                    onDelete = { TasksRepository.deleteTask(task.id) }
+                    onDelete = { TasksRepository.deleteTask(task.id) },
+                    onClick = { selectedTaskForDetail = task }
                 )
             }
         }
@@ -152,6 +159,28 @@ fun TaskListScreen() {
             onTaskCreated = { title, cat, prio, desc, est, energy ->
                 TasksRepository.addTask(title, cat, prio, desc, est, energy)
                 showAddTaskModal = false
+            }
+        )
+    }
+    
+    selectedTaskForDetail?.let { task ->
+        TaskDetailModal(
+            task = task,
+            onDismiss = { selectedTaskForDetail = null },
+            onDelete = { TasksRepository.deleteTask(task.id) },
+            onToggle = { TasksRepository.toggleTask(task.id) },
+            onEdit = { taskToEdit = task }
+        )
+    }
+
+    taskToEdit?.let { task ->
+        AddTaskModal(
+            initialCategory = task.category,
+            taskToEdit = task,
+            onDismiss = { taskToEdit = null },
+            onTaskCreated = { title, cat, prio, desc, est, energy ->
+                TasksRepository.updateTask(task.id, title, cat, prio, desc, est, energy)
+                taskToEdit = null
             }
         )
     }
@@ -175,11 +204,11 @@ fun CategoryChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun TaskCard(task: TaskItem, onToggle: () -> Unit, onDelete: () -> Unit) {
+fun TaskCard(task: TaskItem, onToggle: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
     Surface(
         color = Color.White.copy(alpha = 0.04f),
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(16.dp),

@@ -5,11 +5,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.productivityapp.app.ui.vault.VaultItem
 
+enum class ActionType {
+    CREATE, TOGGLE, DELETE, CREATE_REMINDER
+}
+
+data class ProposedAction(
+    val type: ActionType,
+    val title: String? = null,
+    val category: String? = null,
+    val priority: String? = null,
+    val energyLevel: String? = null,
+    val taskId: String? = null
+)
+
 data class ChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
-    val secureItem: VaultItem? = null
+    val secureItem: VaultItem? = null,
+    val proposedAction: ProposedAction? = null
 )
 
 data class ChatSession(
@@ -19,23 +33,15 @@ data class ChatSession(
 )
 
 object AIRepository {
-    private val defaultMessage = ChatMessage(
-        text = "Hello! I'm your Zenith Intelligence. How can I help you today?",
-        isUser = false
-    )
-
     val sessions = mutableStateListOf<ChatSession>().apply {
-        // Initial session
-        add(ChatSession(title = "New Conversation", messages = mutableStateListOf(defaultMessage)))
+        // Initial empty session
+        add(ChatSession(title = "New Conversation"))
     }
 
     val currentSession = mutableStateOf(sessions[0])
 
     fun createNewSession() {
-        val newSession = ChatSession(
-            title = "New Conversation", 
-            messages = mutableStateListOf(defaultMessage)
-        )
+        val newSession = ChatSession(title = "New Conversation")
         sessions.add(0, newSession)
         currentSession.value = newSession
     }

@@ -15,17 +15,25 @@ import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import com.productivityapp.app.ui.vault.VaultItem
 import com.productivityapp.shared.ai.AIService
 import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.vault.VaultRepository
+import com.productivityapp.app.ui.reminders.RemindersRepository
 import kotlinx.coroutines.launch
 
 // ChatMessage moved to AIRepository.kt
@@ -75,13 +83,24 @@ fun AIScreen() {
         }
         
         // Chat History
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-            items(messages) { message ->
-                ZenithChatBubble(message)
+        if (messages.isEmpty()) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF818CF8).copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Zenith Intelligence", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Secure. Local. Intelligent.", color = Color.Gray, fontSize = 13.sp)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(messages) { message ->
+                    ZenithChatBubble(message)
+                }
             }
         }
         
@@ -170,7 +189,9 @@ fun AIScreen() {
 @Composable
 fun ZenithChatBubble(message: ChatMessage) {
     var isRevealed by remember { mutableStateOf(false) }
+    var isActionProcessed by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -263,6 +284,290 @@ fun ZenithChatBubble(message: ChatMessage) {
                             }
                         }
                     }
+                }
+                
+                // Proposed Task Action Block
+                if (message.proposedAction != null && !isActionProcessed) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ProposedTaskWidget(
+                        action = message.proposedAction,
+                        onConfirm = { updatedAction ->
+                            when (updatedAction.type) {
+                                ActionType.CREATE -> {
+                                    TasksRepository.addTask(
+                                        title = updatedAction.title ?: "New Task",
+                                        category = updatedAction.category ?: "Work",
+                                        priority = updatedAction.priority ?: "Medium",
+                                        energyLevel = updatedAction.energyLevel ?: "Medium"
+                                    )
+                                }
+                                ActionType.CREATE_REMINDER -> {
+                                    RemindersRepository.addReminder(
+                                        title = updatedAction.title ?: "New Reminder",
+                                        date = "Today",
+                                        time = "Soon",
+                                        category = updatedAction.category ?: "Personal",
+                                        priority = updatedAction.priority ?: "Medium"
+                                    )
+                                }
+                                ActionType.TOGGLE -> {
+                                    updatedAction.taskId?.let { TasksRepository.toggleTask(it) }
+                                }
+                                ActionType.DELETE -> {
+                                    updatedAction.taskId?.let { TasksRepository.deleteTask(it) }
+                                }
+                            }
+                            
+                            scope.launch {
+                                kotlinx.coroutines.delay(1500)
+                                isActionProcessed = true
+                                // Add a simple AI acknowledgement
+                                val completionText = when(updatedAction.type) {
+                                    ActionType.CREATE -> "Task '${updatedAction.title}' created successfully!"
+                                    ActionType.CREATE_REMINDER -> "Reminder '${updatedAction.title}' set successfully!"
+                                    ActionType.TOGGLE -> "Task updated!"
+                                    ActionType.DELETE -> "Task deleted!"
+                                }
+                                AIRepository.currentSession.value.messages.add(
+                                    ChatMessage(text = completionText, isUser = false)
+                                )
+                            }
+                        },
+                        onDismiss = { isActionProcessed = true }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProposedTaskWidget(
+    action: ProposedAction, 
+    onConfirm: (ProposedAction) -> Unit, 
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf(action.category ?: "Work") }
+    var selectedPriority by remember { mutableStateOf(action.priority ?: "Medium") }
+    var selectedEnergy by remember { mutableStateOf(action.energyLevel ?: "Medium") }
+    var isConfirmed by remember { mutableStateOf(false) }
+
+    Surface(
+        color = Color.Black.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isConfirmed) Color(0xFF22C55E).copy(alpha = 0.3f) else Color(0xFF818CF8).copy(alpha = 0.2f)),
+        modifier = Modifier.widthIn(max = 280.dp)
+    ) {
+        if (isConfirmed) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Action Confirmed", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        } else {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(Color(0xFF818CF8).copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = when(action.type) {
+                                ActionType.CREATE -> Icons.Default.Add
+                                ActionType.CREATE_REMINDER -> Icons.Default.Notifications
+                                ActionType.TOGGLE -> Icons.Default.CheckCircle
+                                ActionType.DELETE -> Icons.Default.Delete
+                            },
+                            contentDescription = null,
+                            tint = Color(0xFF818CF8),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = when(action.type) {
+                                ActionType.CREATE -> "New Task"
+                                ActionType.CREATE_REMINDER -> "New Reminder"
+                                ActionType.TOGGLE -> "Toggle Task"
+                                ActionType.DELETE -> "Delete Task"
+                            },
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = action.title ?: "Task Action",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                
+                if (action.type == ActionType.CREATE || action.type == ActionType.CREATE_REMINDER) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Priority", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            VerticalWheelPicker(
+                                options = listOf("High", "Medium", "Low"),
+                                initialSelection = selectedPriority,
+                                onItemSelected = { selectedPriority = it }
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Category", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            VerticalWheelPicker(
+                                options = listOf("Work", "Personal", "Finance", "Social", "Health", "Travel"),
+                                initialSelection = selectedCategory,
+                                onItemSelected = { selectedCategory = it }
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(backgroundColor = Color.White.copy(alpha = 0.05f)),
+                        shape = RoundedCornerShape(10.dp),
+                        elevation = null,
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("Dismiss", color = Color.Gray, fontSize = 11.sp)
+                    }
+                    
+                    Button(
+                        onClick = { 
+                            onConfirm(action.copy(
+                                category = selectedCategory,
+                                priority = selectedPriority,
+                                energyLevel = selectedEnergy
+                            )) 
+                            isConfirmed = true
+                        },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF818CF8).copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(10.dp),
+                        elevation = null,
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("Confirm", color = Color(0xFF818CF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun VerticalWheelPicker(
+    options: List<String>,
+    initialSelection: String,
+    onItemSelected: (String) -> Unit
+) {
+    val itemHeight = 32.dp
+    val visibleItems = 3
+    val initialIndex = options.indexOf(initialSelection).coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    
+    // Track selection
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            val centerIndex = listState.firstVisibleItemIndex
+            if (centerIndex in options.indices) {
+                onItemSelected(options[centerIndex])
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .height(itemHeight * visibleItems)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Selection Highlight (Glassy lines)
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+            Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(itemHeight))
+            Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+        }
+
+        LazyColumn(
+            state = listState,
+            flingBehavior = flingBehavior,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = itemHeight)
+        ) {
+            items(options.size) { index ->
+                val option = options[index]
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .graphicsLayer {
+                            val itemOffset = listState.layoutInfo.visibleItemsInfo
+                                .find { it.index == index }
+                                ?.let { it.offset + it.size / 2 } ?: 0
+                            val viewportCenter = listState.layoutInfo.viewportEndOffset / 2
+                            val distanceFromCenter = kotlin.math.abs(itemOffset - viewportCenter).toFloat()
+                            val normalizedDistance = (distanceFromCenter / (itemHeight.toPx() * 1.5f)).coerceIn(0f, 1f)
+                            
+                            alpha = 1f - (normalizedDistance * 0.6f)
+                            scaleX = 1f - (normalizedDistance * 0.2f)
+                            scaleY = 1f - (normalizedDistance * 0.2f)
+                            rotationX = normalizedDistance * 45f * (if (itemOffset < viewportCenter) 1f else -1f)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = option,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectionSection(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Column {
+        Text(label, color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            options.forEach { option ->
+                val isSelected = option == selected
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) Color(0xFF818CF8).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                        .clickable { onSelect(option) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(option, color = if (isSelected) Color(0xFF818CF8) else Color.Gray, fontSize = 11.sp)
                 }
             }
         }
@@ -397,15 +702,23 @@ fun parseInlineStyles(text: String): androidx.compose.ui.text.AnnotatedString {
 }
 
 fun buildSystemPrompt(): String {
-    val taskCtx = TasksRepository.tasks.joinToString("\n") { "- ${it.title} (${it.category}, ${it.priority}, ${it.energyLevel} energy)" }
+    val taskCtx = TasksRepository.tasks.joinToString("\n") { 
+        "- ${it.title} | Status: ${if (it.isCompleted) "Done" else "Pending"} | Category: ${it.category} | Priority: ${it.priority} [ID: ${it.id}]" 
+    }
     val vaultCtx = VaultRepository.vaultItems.joinToString("\n") { "- ${it.site}: ${it.description} (${it.category})" }
     
     return """
         You are Zenith Intelligence, a premium productivity assistant.
-        You are professional, concise, and helpful.
         
-        SECURITY RULE: NEVER show passwords. If a user asks for a password or login details, identify the account and then use the special tag [REVEAL: SiteName] to trigger the local secure reveal UI.
-        Example: "I found your Netflix account. Would you like to [REVEAL: Netflix]?"
+        ACTION TAGS:
+        - To suggest creating a task: [CREATE_TASK: title]
+        - To suggest creating a reminder: [CREATE_REMINDER: title]
+        - To suggest toggling a task completion: [TOGGLE_TASK: task_id]
+        - To suggest deleting a task: [DELETE_TASK: task_id]
+        - To suggest revealing a password: [REVEAL: SiteName]
+        
+        IMPORTANT: NEVER show ID numbers (e.g. UUIDs) to the user. Use them only inside action tags.
+        Keep task suggestions simple. The user can refine details like priority and category in the chat widget.
         
         CURRENT CONTEXT:
         TASKS:
@@ -413,30 +726,77 @@ fun buildSystemPrompt(): String {
         
         SECURE VAULT (METADATA ONLY):
         $vaultCtx
-        
-        Answer based on this context. If something isn't here, say you don't have access to that information.
     """.trimIndent()
 }
 
 fun processResponse(response: String, messages: MutableList<ChatMessage>) {
     val revealPattern = Regex("\\[REVEAL: (.*?)\\]")
-    val match = revealPattern.find(response)
+    val createPattern = Regex("\\[CREATE_TASK: (.*?)\\]")
+    val togglePattern = Regex("\\[TOGGLE_TASK: (.*?)\\]")
+    val deletePattern = Regex("\\[DELETE_TASK: (.*?)\\]")
     
-    if (match != null) {
-        val siteName = match.groupValues[1].trim()
-        val cleanText = response.replace(revealPattern, "reveal it below")
-        val vaultItem = VaultRepository.vaultItems.find { 
-            it.site.equals(siteName, ignoreCase = true) || 
-            it.site.contains(siteName, ignoreCase = true) || 
-            siteName.contains(it.site, ignoreCase = true)
+    val revealMatch = revealPattern.find(response)
+    val createMatch = createPattern.find(response)
+    val reminderPattern = Regex("\\[CREATE_REMINDER: (.*?)\\]")
+    val reminderMatch = reminderPattern.find(response)
+    val toggleMatch = togglePattern.find(response)
+    val deleteMatch = deletePattern.find(response)
+    
+    when {
+        revealMatch != null -> {
+            val siteName = revealMatch.groupValues[1].trim()
+            val cleanText = response.replace(revealMatch.value, "reveal it below")
+            val vaultItem = VaultRepository.vaultItems.find { 
+                it.site.contains(siteName, ignoreCase = true) || siteName.contains(it.site, ignoreCase = true)
+            }
+            messages.add(ChatMessage(text = cleanText, isUser = false, secureItem = vaultItem))
         }
-        
-        messages.add(ChatMessage(
-            text = cleanText,
-            isUser = false,
-            secureItem = vaultItem
-        ))
-    } else {
-        messages.add(ChatMessage(text = response, isUser = false))
+        createMatch != null -> {
+            val cleanText = response.replace(createMatch.value, "").trim()
+            messages.add(ChatMessage(
+                text = cleanText,
+                isUser = false,
+                proposedAction = ProposedAction(
+                    type = ActionType.CREATE,
+                    title = createMatch.groupValues[1].trim()
+                )
+            ))
+        }
+        reminderMatch != null -> {
+            val cleanText = response.replace(reminderMatch.value, "").trim()
+            messages.add(ChatMessage(
+                text = cleanText,
+                isUser = false,
+                proposedAction = ProposedAction(
+                    type = ActionType.CREATE_REMINDER,
+                    title = reminderMatch.groupValues[1].trim()
+                )
+            ))
+        }
+        toggleMatch != null -> {
+            val cleanText = response.replace(toggleMatch.value, "").trim()
+            messages.add(ChatMessage(
+                text = cleanText,
+                isUser = false,
+                proposedAction = ProposedAction(
+                    type = ActionType.TOGGLE,
+                    taskId = toggleMatch.groupValues[1].trim()
+                )
+            ))
+        }
+        deleteMatch != null -> {
+            val cleanText = response.replace(deleteMatch.value, "").trim()
+            messages.add(ChatMessage(
+                text = cleanText,
+                isUser = false,
+                proposedAction = ProposedAction(
+                    type = ActionType.DELETE,
+                    taskId = deleteMatch.groupValues[1].trim()
+                )
+            ))
+        }
+        else -> {
+            messages.add(ChatMessage(text = response, isUser = false))
+        }
     }
 }

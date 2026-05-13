@@ -17,7 +17,13 @@ data class TaskItem(
 )
 
 object TasksRepository {
-    val tasks = mutableStateListOf<TaskItem>()
+    val tasks = mutableStateListOf<TaskItem>(
+        TaskItem(title = "Finish Zenith AI Integration", category = "Work", priority = "High", energyLevel = "High", estimatedMins = 120, time = "Today"),
+        TaskItem(title = "Weekly budget review", category = "Finance", priority = "Medium", energyLevel = "Low", estimatedMins = 30, time = "Today"),
+        TaskItem(title = "30-min Cardio", category = "Health", priority = "High", energyLevel = "High", estimatedMins = 30, time = "Today"),
+        TaskItem(title = "Call Mom", category = "Social", priority = "Medium", energyLevel = "Low", estimatedMins = 15, time = "Today"),
+        TaskItem(title = "Plan weekend trip", category = "Travel", priority = "Low", energyLevel = "Medium", estimatedMins = 45, time = "Today")
+    )
     
     fun addTask(
         title: String, 
@@ -66,5 +72,27 @@ object TasksRepository {
     
     fun deleteTask(id: String) {
         tasks.removeAll { it.id == id }
+    }
+
+    fun updateTask(
+        id: String,
+        title: String,
+        category: String,
+        priority: String,
+        description: String,
+        estimatedMins: Int,
+        energyLevel: String
+    ) {
+        val index = tasks.indexOfFirst { it.id == id }
+        if (index != -1) {
+            tasks[index] = tasks[index].copy(
+                title = title,
+                category = category,
+                priority = priority,
+                description = description,
+                estimatedMins = estimatedMins,
+                energyLevel = energyLevel
+            )
+        }
     }
 }

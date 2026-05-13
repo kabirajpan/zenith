@@ -17,11 +17,15 @@ data class ReminderItem(
 )
 
 object RemindersRepository {
-    private val _reminders = mutableStateListOf<ReminderItem>()
+    private val _reminders = mutableStateListOf<ReminderItem>(
+        ReminderItem(title = "Morning Coffee & Standup", date = "Today", time = "09:00 AM", category = "Work", priority = "Medium"),
+        ReminderItem(title = "Check Zen Note sync", date = "Today", time = "02:00 PM", category = "Work", priority = "High"),
+        ReminderItem(title = "Grocery shopping", date = "May 15", time = "06:00 PM", category = "Personal", priority = "Low")
+    )
     val reminders: List<ReminderItem> get() = _reminders
 
     fun addReminder(title: String, date: String, time: String, category: String, priority: String, nexusId: String? = null) {
-        _reminders.add(ReminderItem(title = title, date = date, time = time, category = category, priority = priority, nexusId = nexusId))
+        _reminders.add(0, ReminderItem(title = title, date = date, time = time, category = category, priority = priority, nexusId = nexusId))
     }
 
     fun toggleReminder(id: String) {
@@ -32,7 +36,27 @@ object RemindersRepository {
         }
     }
 
+    fun updateReminder(
+        id: String,
+        title: String,
+        date: String,
+        time: String,
+        category: String,
+        priority: String
+    ) {
+        val index = _reminders.indexOfFirst { it.id == id }
+        if (index != -1) {
+            _reminders[index] = _reminders[index].copy(
+                title = title,
+                date = date,
+                time = time,
+                category = category,
+                priority = priority
+            )
+        }
+    }
+
     fun deleteReminder(id: String) {
-        _reminders.removeIf { it.id == id }
+        _reminders.removeAll { it.id == id }
     }
 }

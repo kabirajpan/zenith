@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.productivityapp.app.ui.tasks.VerticalWheelPicker
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 
 @Composable
 fun ReminderScreen() {
@@ -33,8 +36,10 @@ fun ReminderScreen() {
     
     val reminders = RemindersRepository.reminders
     var showAddModal by remember { mutableStateOf(false) }
-
-    val filteredReminders by remember {
+    var selectedReminderForDetail by remember { mutableStateOf<ReminderItem?>(null) }
+    var reminderToEdit by remember { mutableStateOf<ReminderItem?>(null) }
+ 
+    val filteredReminders by remember(searchQuery, selectedCategory) {
         derivedStateOf {
             reminders.filter { item ->
                 val matchesSearch = item.title.contains(searchQuery, ignoreCase = true)
@@ -150,7 +155,8 @@ fun ReminderScreen() {
                 ReminderCard(
                     item = item,
                     onToggle = { RemindersRepository.toggleReminder(item.id) },
-                    onDelete = { RemindersRepository.deleteReminder(item.id) }
+                    onDelete = { RemindersRepository.deleteReminder(item.id) },
+                    onClick = { selectedReminderForDetail = item }
                 )
             }
         }
@@ -165,14 +171,35 @@ fun ReminderScreen() {
             }
         )
     }
+
+    selectedReminderForDetail?.let { item ->
+        ReminderDetailModal(
+            item = item,
+            onDismiss = { selectedReminderForDetail = null },
+            onDelete = { RemindersRepository.deleteReminder(item.id) },
+            onToggle = { RemindersRepository.toggleReminder(item.id) },
+            onEdit = { reminderToEdit = item }
+        )
+    }
+
+    reminderToEdit?.let { item ->
+        AddReminderModal(
+            reminderToEdit = item,
+            onDismiss = { reminderToEdit = null },
+            onSave = { title, date, time, category, priority ->
+                RemindersRepository.updateReminder(item.id, title, date, time, category, priority)
+                reminderToEdit = null
+            }
+        )
+    }
 }
 
 @Composable
-fun ReminderCard(item: ReminderItem, onToggle: () -> Unit, onDelete: () -> Unit) {
+fun ReminderCard(item: ReminderItem, onToggle: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
     Surface(
         color = Color.White.copy(alpha = 0.04f),
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -232,21 +259,31 @@ fun ReminderCard(item: ReminderItem, onToggle: () -> Unit, onDelete: () -> Unit)
 }
 
 @Composable
-fun AddReminderModal(onDismiss: () -> Unit, onSave: (String, String, String, String, String) -> Unit) {
-    var title by remember { mutableStateOf("") }
+fun AddReminderModal(
+    reminderToEdit: ReminderItem? = null,
+    onDismiss: () -> Unit, 
+    onSave: (String, String, String, String, String) -> Unit
+) {
+    var title by remember { mutableStateOf(reminderToEdit?.title ?: "") }
     
-    // Time Selection States
-    var selectedHour by remember { mutableIntStateOf(9) }
-    var selectedMinute by remember { mutableIntStateOf(0) }
-    var selectedAmPm by remember { mutableStateOf("AM") }
+    // Robust Time Parsing
+    val initialTime = reminderToEdit?.time ?: "09:00 AM"
+    val timeParts = initialTime.split(":", " ")
+    val initialHour = try { timeParts.getOrNull(0)?.toInt() ?: 9 } catch(e: Exception) { 9 }
+    val initialMinute = try { timeParts.getOrNull(1)?.toInt() ?: 0 } catch(e: Exception) { 0 }
+    val initialAmPm = if (timeParts.contains("PM")) "PM" else "AM"
+
+    var selectedHour by remember { mutableStateOf(initialHour.toString().padStart(2, '0')) }
+    var selectedMinute by remember { mutableStateOf(initialMinute.toString().padStart(2, '0')) }
+    var selectedAmPm by remember { mutableStateOf(initialAmPm) }
     
     // Date Selection States (Month & Day)
     val now = java.time.LocalDate.now()
-    var selectedMonth by remember { mutableStateOf(now.month) }
-    var selectedDay by remember { mutableIntStateOf(now.dayOfMonth) }
+    var selectedMonth by remember { mutableStateOf(now.month.name.take(3).capitalize()) }
+    var selectedDay by remember { mutableStateOf(now.dayOfMonth.toString()) }
     
-    var category by remember { mutableStateOf("Personal") }
-    var priority by remember { mutableStateOf("Medium") }
+    var category by remember { mutableStateOf(reminderToEdit?.category ?: "Personal") }
+    var priority by remember { mutableStateOf(reminderToEdit?.priority ?: "Medium") }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -274,6 +311,31 @@ fun AddReminderModal(onDismiss: () -> Unit, onSave: (String, String, String, Str
                     onValueChange = { title = it },
                     placeholder = "e.g. Call the team"
                 )
+
+                // Category & Priority Row (Premium Wheels)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Category", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        VerticalWheelPicker(
+                            options = listOf("Work", "Personal", "Finance", "Social", "Health", "Travel"),
+                            initialSelection = category,
+                            onItemSelected = { category = it }
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Priority", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        VerticalWheelPicker(
+                            options = listOf("Low", "Medium", "High"),
+                            initialSelection = priority,
+                            onItemSelected = { priority = it }
+                        )
+                    }
+                }
                 
                 // Date & Time Wheel Pickers
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -282,73 +344,56 @@ fun AddReminderModal(onDismiss: () -> Unit, onSave: (String, String, String, Str
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Date Wheels (Month & Day)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            WheelPicker(
-                                items = java.time.Month.values().toList(),
-                                initialValue = selectedMonth,
-                                format = { it.name.take(3) },
-                                onValueChange = { selectedMonth = it }
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            WheelPicker(
-                                items = (1..selectedMonth.length(now.isLeapYear)).toList(),
-                                initialValue = selectedDay,
-                                onValueChange = { selectedDay = it }
+                        // Date Wheels
+                        Column(modifier = Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Month", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            VerticalWheelPicker(
+                                options = java.time.Month.values().map { it.name.take(3).capitalize() },
+                                initialSelection = selectedMonth,
+                                onItemSelected = { selectedMonth = it }
                             )
                         }
-
-                        // Vertical Divider
-                        Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.1f)))
+                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Day", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            VerticalWheelPicker(
+                                options = (1..31).map { it.toString() },
+                                initialSelection = selectedDay,
+                                onItemSelected = { selectedDay = it }
+                            )
+                        }
 
                         // Time Wheels
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            WheelPicker(
-                                items = (1..12).toList(),
-                                initialValue = selectedHour,
-                                onValueChange = { selectedHour = it }
-                            )
-                            Text(":", color = Color.White.copy(alpha = 0.5f), fontSize = 18.sp)
-                            WheelPicker(
-                                items = (0..59).toList(),
-                                initialValue = selectedMinute,
-                                format = { it.toString().padStart(2, '0') },
-                                onValueChange = { selectedMinute = it }
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            WheelPicker(
-                                items = listOf("AM", "PM"),
-                                initialValue = selectedAmPm,
-                                onValueChange = { selectedAmPm = it }
+                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Hr", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            VerticalWheelPicker(
+                                options = (1..12).map { it.toString().padStart(2, '0') },
+                                initialSelection = selectedHour,
+                                onItemSelected = { selectedHour = it }
                             )
                         }
-                    }
-                }
-
-                Column {
-                    Text("Priority", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Low", "Medium", "High").forEach { prio ->
-                            val isSelected = priority == prio
-                            val color = when(prio) {
-                                "High" -> Color(0xFFF87171)
-                                "Medium" -> Color(0xFFFBBF24)
-                                else -> Color(0xFF34D399)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) color.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.04f))
-                                    .border(if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.4f)) else androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(10.dp))
-                                    .clickable { priority = prio }
-                                    .padding(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Text(prio, color = if (isSelected) color else Color.Gray, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                            }
+                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Min", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            VerticalWheelPicker(
+                                options = (0..59).map { it.toString().padStart(2, '0') },
+                                initialSelection = selectedMinute,
+                                onItemSelected = { selectedMinute = it }
+                            )
+                        }
+                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Mode", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            VerticalWheelPicker(
+                                options = listOf("AM", "PM"),
+                                initialSelection = selectedAmPm,
+                                onItemSelected = { selectedAmPm = it }
+                            )
                         }
                     }
                 }
@@ -368,10 +413,7 @@ fun AddReminderModal(onDismiss: () -> Unit, onSave: (String, String, String, Str
                     Button(
                         onClick = { 
                             if (title.isNotBlank()) {
-                                val dateStr = if (selectedMonth == now.month && selectedDay == now.dayOfMonth) "Today" 
-                                             else "${selectedMonth.name.take(3)} $selectedDay"
-                                val timeStr = "${selectedHour}:${selectedMinute.toString().padStart(2, '0')} $selectedAmPm"
-                                onSave(title, dateStr, timeStr, category, priority) 
+                                onSave(title, selectedMonth + " " + selectedDay, "$selectedHour:$selectedMinute $selectedAmPm", category, priority) 
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -383,7 +425,7 @@ fun AddReminderModal(onDismiss: () -> Unit, onSave: (String, String, String, Str
                         modifier = Modifier.weight(0.6f)
                     ) {
                         Text(
-                            "Save", 
+                            if (reminderToEdit != null) "Update" else "Save", 
                             color = if (title.isNotBlank()) Color.White else Color.White.copy(alpha = 0.5f), 
                             fontSize = 12.sp, 
                             fontWeight = FontWeight.Bold
@@ -396,81 +438,127 @@ fun AddReminderModal(onDismiss: () -> Unit, onSave: (String, String, String, Str
 }
 
 @Composable
-fun <T> WheelPicker(
-    items: List<T>,
-    initialValue: T,
-    format: (T) -> String = { it.toString() },
-    onValueChange: (T) -> Unit
+fun ReminderDetailModal(
+    item: ReminderItem,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit
 ) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val itemHeight = 40.dp
-    val visibleItems = 3
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState(
-        initialFirstVisibleItemIndex = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2 % items.size) + items.indexOf(initialValue) - 1
-    )
-
-    val centerIndex by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex + 1
-        }
-    }
-
-    LaunchedEffect(centerIndex) {
-        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-        onValueChange(items[centerIndex % items.size])
-    }
-
-    // Snapping Logic
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            listState.animateScrollToItem(centerIndex - 1)
-        }
-    }
-
-    Box(modifier = Modifier.height(itemHeight * visibleItems).width(if (items.size > 20) 45.dp else 40.dp)) {
-        androidx.compose.foundation.lazy.LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.85f),
+            color = Color(0xFF0F172A),
+            shape = RoundedCornerShape(24.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
-            items(Int.MAX_VALUE) { i ->
-                val item = items[i % items.size]
-                val isSelected = i == centerIndex
-                
-                Box(
-                    modifier = Modifier
-                        .height(itemHeight)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = format(item),
-                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
-                        fontSize = if (isSelected) 15.sp else 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.scale(if (isSelected) 1.1f else 1f)
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.category.uppercase(),
+                            color = Color(0xFF818CF8),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = item.title,
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                    }
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { 
+                        onEdit()
+                        onDismiss()
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Edit Reminder", color = Color(0xFF818CF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.05f))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DetailRowItem("Priority", item.priority, Icons.Default.Flag)
+                    DetailRowItem("Schedule", "${item.date} • ${item.time}", Icons.Default.Event)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { 
+                            onToggle()
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = if (item.isCompleted) Color.Gray.copy(alpha = 0.1f) else Color(0xFF818CF8)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (item.isCompleted) Icons.Default.Undo else Icons.Default.Check,
+                            contentDescription = null,
+                            tint = if (item.isCompleted) Color.Gray else Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (item.isCompleted) "Reactivate" else "Mark Done",
+                            color = if (item.isCompleted) Color.Gray else Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    IconButton(
+                        onClick = {
+                            onDelete()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color.Red.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f))
+                    }
                 }
             }
         }
-        
-        // Selection Overlays (Subtle lines)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(Color.White.copy(alpha = 0.05f))
-                .align(Alignment.Center)
-                .offset(y = (-20).dp)
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(Color.White.copy(alpha = 0.05f))
-                .align(Alignment.Center)
-                .offset(y = 20.dp)
-        )
+    }
+}
+
+@Composable
+fun RowScope.DetailRowItem(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Column(modifier = Modifier.weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(label, color = Color.Gray, fontSize = 10.sp)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 

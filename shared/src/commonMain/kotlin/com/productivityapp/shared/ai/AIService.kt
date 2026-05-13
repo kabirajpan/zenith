@@ -43,7 +43,7 @@ object AIService {
         }
     }
 
-    private const val API_KEY = "YOUR_GROQ_API_KEY_HERE" // DO NOT COMMIT SECRETS
+    private const val API_KEY = AIConfig.GROQ_API_KEY
     private const val API_URL = "https://api.groq.com/openai/v1/chat/completions"
     private const val MODEL = "llama-3.1-8b-instant"
 
