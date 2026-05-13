@@ -25,7 +25,7 @@ fun VaultScreen() {
     var selectedCategory by remember { mutableStateOf("All") }
     var showAddModal by remember { mutableStateOf(false) }
     
-    val vaultItems = remember { mutableStateListOf<VaultItem>() }
+    val vaultItems = VaultRepository.vaultItems
     val categories = listOf("All", "Social", "Work", "Finance")
     
     val filteredItems = remember(searchQuery, selectedCategory, vaultItems.size) {
@@ -66,8 +66,8 @@ fun VaultScreen() {
         if (showAddModal) {
             AddVaultItemModal(
                 onDismiss = { showAddModal = false },
-                onAdd = { newItem ->
-                    vaultItems.add(newItem)
+                onAdd = { item ->
+                    VaultRepository.addVaultItem(item)
                     showAddModal = false
                 }
             )
@@ -206,10 +206,13 @@ fun VaultCard(item: VaultItem) {
 }
 
 data class VaultItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val site: String,
     val username: String,
+    val password: String,
     val category: String,
-    val password: String
+    val description: String = "",
+    val isAiSearchable: Boolean = true
 )
 
 val dummyVaultItems = emptyList<VaultItem>()
@@ -219,6 +222,7 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
     var site by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("Social") }
     val categories = listOf("Social", "Work", "Finance")
 
@@ -227,7 +231,7 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.80f),
+            modifier = Modifier.fillMaxWidth(0.85f),
             color = Color(0xFF0F172A),
             shape = RoundedCornerShape(24.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
@@ -242,9 +246,10 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
                     Text("Secure Entry", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
                 
-                VaultInputField(label = "Account", value = site, onValueChange = { site = it })
-                VaultInputField(label = "Username", value = username, onValueChange = { username = it })
-                VaultInputField(label = "Password", value = password, onValueChange = { password = it }, isPassword = true)
+                VaultInputField(label = "Account / Site", value = site, onValueChange = { site = it })
+                VaultInputField(label = "Username / ID", value = username, onValueChange = { username = it })
+                VaultInputField(label = "Password / Secret", value = password, onValueChange = { password = it }, isPassword = true)
+                VaultInputField(label = "Internal Notes (AI Searchable)", value = description, onValueChange = { description = it })
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -290,7 +295,7 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
                     Button(
                         onClick = { 
                             if (site.isNotBlank() && username.isNotBlank()) {
-                                onAdd(VaultItem(site, username, category, password))
+                                onAdd(VaultItem(site = site, username = username, password = password, category = category, description = description))
                             }
                         },
                         modifier = Modifier.weight(0.6f),

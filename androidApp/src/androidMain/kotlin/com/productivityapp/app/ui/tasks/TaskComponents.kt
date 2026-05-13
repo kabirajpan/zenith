@@ -21,10 +21,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
 @Composable
-fun AddTaskModal(initialCategory: String, onDismiss: () -> Unit, onTaskCreated: (String, String, String) -> Unit) {
+fun AddTaskModal(
+    initialCategory: String, 
+    onDismiss: () -> Unit, 
+    onTaskCreated: (String, String, String, String, Int, String) -> Unit
+) {
     var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(initialCategory) }
     var selectedPriority by remember { mutableStateOf("Medium") }
+    var estimatedMins by remember { mutableStateOf(30) }
+    var energyLevel by remember { mutableStateOf("Medium") }
     
     val focusRequester = remember { FocusRequester() }
     
@@ -37,7 +44,7 @@ fun AddTaskModal(initialCategory: String, onDismiss: () -> Unit, onTaskCreated: 
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.80f),
+            modifier = Modifier.fillMaxWidth(0.90f),
             color = Color(0xFF0F172A),
             shape = RoundedCornerShape(24.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
@@ -58,59 +65,88 @@ fun AddTaskModal(initialCategory: String, onDismiss: () -> Unit, onTaskCreated: 
                     onValueChange = { title = it },
                     modifier = Modifier.focusRequester(focusRequester)
                 )
+
+                TaskInputField(
+                    label = "Context / Notes (Optional)",
+                    value = description,
+                    onValueChange = { description = it }
+                )
                 
-                // Category Selection
-                Column {
-                    Text("Category", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Work", "Personal", "Health").forEach { cat ->
-                            val isSelected = selectedCategory == cat
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) Color(0xFF818CF8).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
-                                    .border(if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.5f)) else androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(10.dp))
-                                    .clickable { selectedCategory = cat }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    cat, 
-                                    color = if (isSelected) Color(0xFF818CF8) else Color.Gray,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Category Selection
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Category", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("Work", "Personal").forEach { cat ->
+                                val isSelected = selectedCategory == cat
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) Color(0xFF818CF8).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                        .clickable { selectedCategory = cat }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(cat, color = if (isSelected) Color(0xFF818CF8) else Color.Gray, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Priority Selection
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Priority", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("Low", "High").forEach { prio ->
+                                val isSelected = selectedPriority == prio
+                                val color = if (prio == "High") Color(0xFFF87171) else Color(0xFF34D399)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                        .clickable { selectedPriority = prio }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(prio, color = if (isSelected) color else Color.Gray, fontSize = 10.sp)
+                                }
                             }
                         }
                     }
                 }
-                
-                // Priority Selection
-                Column {
-                    Text("Priority", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Low", "Medium", "High").forEach { prio ->
-                            val isSelected = selectedPriority == prio
-                            val color = when(prio) {
-                                "High" -> Color(0xFFF87171)
-                                "Medium" -> Color(0xFFFBBF24)
-                                else -> Color(0xFF34D399)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
-                                    .border(if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)) else androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(10.dp))
-                                    .clickable { selectedPriority = prio }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    prio, 
-                                    color = if (isSelected) color else Color.Gray,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
+
+                // Intelligence Hub: Time & Energy
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Estimate (Mins)", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${estimatedMins}m", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Slider(
+                                value = estimatedMins.toFloat(),
+                                onValueChange = { estimatedMins = it.toInt() },
+                                valueRange = 5f..120f,
+                                steps = 11,
+                                colors = SliderDefaults.colors(thumbColor = Color(0xFF818CF8), activeTrackColor = Color(0xFF818CF8))
+                            )
+                        }
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Energy Required", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("Low", "Mid", "High").forEach { energy ->
+                                val isSelected = energyLevel.startsWith(energy)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) Color(0xFFFBBF24).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                        .clickable { energyLevel = energy }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(energy, color = if (isSelected) Color(0xFFFBBF24) else Color.Gray, fontSize = 10.sp)
+                                }
                             }
                         }
                     }
@@ -129,7 +165,9 @@ fun AddTaskModal(initialCategory: String, onDismiss: () -> Unit, onTaskCreated: 
                         Text("Cancel", color = Color.Gray, fontSize = 12.sp)
                     }
                     Button(
-                        onClick = { if (title.isNotBlank()) onTaskCreated(title, selectedCategory, selectedPriority) },
+                        onClick = { 
+                            if (title.isNotBlank()) onTaskCreated(title, selectedCategory, selectedPriority, description, estimatedMins, energyLevel) 
+                        },
                         colors = ButtonDefaults.buttonColors(
                             backgroundColor = Color(0xFF818CF8),
                             disabledBackgroundColor = Color(0xFF818CF8)

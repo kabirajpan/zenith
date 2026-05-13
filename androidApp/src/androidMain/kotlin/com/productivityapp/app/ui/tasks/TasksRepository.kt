@@ -6,22 +6,37 @@ import com.productivityapp.app.ui.reminders.RemindersRepository
 data class TaskItem(
     val id: String = java.util.UUID.randomUUID().toString(),
     val title: String,
+    val description: String = "",
     val time: String,
     val priority: String,
     val category: String,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    val estimatedMins: Int = 30,
+    val energyLevel: String = "Medium", // Low, Medium, High
+    val completedAt: Long? = null
 )
 
 object TasksRepository {
     val tasks = mutableStateListOf<TaskItem>()
     
-    fun addTask(title: String, category: String, priority: String) {
-        tasks.add(0, TaskItem(
+    fun addTask(
+        title: String, 
+        category: String, 
+        priority: String, 
+        description: String = "", 
+        estimatedMins: Int = 30, 
+        energyLevel: String = "Medium"
+    ) {
+        val newTask = TaskItem(
             title = title,
+            description = description,
             time = "Today",
             priority = priority,
-            category = category
-        ))
+            category = category,
+            estimatedMins = estimatedMins,
+            energyLevel = energyLevel
+        )
+        tasks.add(0, newTask)
         
         // Intelligent Alarm-Reminder Nexus
         RemindersRepository.addReminder(
@@ -29,7 +44,8 @@ object TasksRepository {
             date = "Today",
             time = "Soon",
             category = category,
-            priority = priority
+            priority = priority,
+            nexusId = newTask.id
         )
     }
     

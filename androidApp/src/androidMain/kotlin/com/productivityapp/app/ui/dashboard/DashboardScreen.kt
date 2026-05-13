@@ -42,10 +42,13 @@ import com.productivityapp.app.ui.alarm.AlarmScreen
 import com.productivityapp.app.ui.notes.NoteEditorScreen
 import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.tasks.AddTaskModal
+import com.productivityapp.app.ui.ai.AIScreen
+import com.productivityapp.app.ui.ai.AIRepository
 
 sealed class ZenithScreen {
     object Dashboard : ZenithScreen()
     object Tasks : ZenithScreen()
+    object AI : ZenithScreen()
     object Vault : ZenithScreen()
     object Notes : ZenithScreen()
     object NoteEditor : ZenithScreen()
@@ -115,14 +118,16 @@ fun DashboardScreen() {
                     ZenithBottomNav(
                         selectedTab = when(currentScreen) {
                             ZenithScreen.Dashboard -> 0
-                            ZenithScreen.Tasks -> 1
+                            ZenithScreen.AI -> 1
+                            ZenithScreen.Tasks -> 2
                             ZenithScreen.Settings -> 3
                             else -> 0
                         },
                         onTabSelected = { index ->
                             currentScreen = when(index) {
                                 0 -> ZenithScreen.Dashboard
-                                1 -> ZenithScreen.Tasks
+                                1 -> ZenithScreen.AI
+                                2 -> ZenithScreen.Tasks
                                 3 -> ZenithScreen.Settings
                                 else -> currentScreen
                             }
@@ -131,7 +136,7 @@ fun DashboardScreen() {
                 }
             },
             floatingActionButton = {
-                if (!isEditor && currentScreen != ZenithScreen.Settings) {
+                if (!isEditor && currentScreen != ZenithScreen.Settings && currentScreen != ZenithScreen.AI) {
                     FloatingActionButton(
                         onClick = { isQuickActionsVisible = true },
                         backgroundColor = Color(0xFF818CF8),
@@ -148,9 +153,10 @@ fun DashboardScreen() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(if (isEditor) PaddingValues(0.dp) else paddingValues)
+                    .consumeWindowInsets(if (isEditor) PaddingValues(0.dp) else paddingValues)
             ) {
                 when (currentScreen) {
-                    ZenithScreen.Dashboard -> MainContent()
+                    ZenithScreen.Dashboard -> MainContent(onNavigate = { currentScreen = it })
                     ZenithScreen.Tasks -> TaskListScreen()
                     ZenithScreen.Vault -> VaultScreen()
                     ZenithScreen.Notes -> NotesScreen(
@@ -170,6 +176,7 @@ fun DashboardScreen() {
                             currentScreen = ZenithScreen.Notes 
                         }
                     )
+                    ZenithScreen.AI -> AIScreen()
                     ZenithScreen.Alarm -> AlarmScreen()
                     ZenithScreen.Draw -> PlaceholderScreen("Draw")
                     ZenithScreen.Reminder -> ReminderScreen()
@@ -244,8 +251,8 @@ fun DashboardScreen() {
             AddTaskModal(
                 initialCategory = "Work",
                 onDismiss = { showAddTaskModal = false },
-                onTaskCreated = { title, category, priority ->
-                    TasksRepository.addTask(title, category, priority)
+                onTaskCreated = { title, cat, prio, desc, est, energy ->
+                    TasksRepository.addTask(title, cat, prio, desc, est, energy)
                     showAddTaskModal = false
                 }
             )
@@ -273,7 +280,14 @@ fun DashboardScreen() {
             exit = slideOutHorizontally(targetOffsetX = { it }),
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            RightSidebarContent { isRightSidebarVisible = false }
+            RightSidebarContent(
+                currentScreen = currentScreen,
+                onNavigate = { screen ->
+                    currentScreen = screen
+                    isRightSidebarVisible = false
+                },
+                onClose = { isRightSidebarVisible = false }
+            )
         }
 
     }
@@ -509,8 +523,8 @@ fun ZenithBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
             .height(56.dp)
     ) {
         BottomNavItem(icon = Icons.Default.Home, label = "Home", selected = selectedTab == 0, onClick = { onTabSelected(0) })
-        BottomNavItem(icon = Icons.Default.Done, label = "Tasks", selected = selectedTab == 1, onClick = { onTabSelected(1) })
-        BottomNavItem(icon = Icons.Default.Star, label = "AI", selected = selectedTab == 2, onClick = { onTabSelected(2) })
+        BottomNavItem(icon = Icons.Default.Star, label = "AI", selected = selectedTab == 1, onClick = { onTabSelected(1) })
+        BottomNavItem(icon = Icons.Default.Done, label = "Tasks", selected = selectedTab == 2, onClick = { onTabSelected(2) })
         BottomNavItem(icon = Icons.Default.Settings, label = "Settings", selected = selectedTab == 3, onClick = { onTabSelected(3) })
     }
 }
@@ -533,7 +547,7 @@ fun RowScope.BottomNavItem(
 }
 
 @Composable
-fun MainContent() {
+fun MainContent(onNavigate: (ZenithScreen) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -554,30 +568,37 @@ fun MainContent() {
         Spacer(modifier = Modifier.height(12.dp))
         
         // Compact AI Nudge
+        // New Chat Option on Dashboard
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    color = Color.White.copy(alpha = 0.04f),
-                    shape = RoundedCornerShape(10.dp)
+                    brush = Brush.horizontalGradient(listOf(Color(0xFF818CF8).copy(alpha = 0.15f), Color(0xFF818CF8).copy(alpha = 0.05f))),
+                    shape = RoundedCornerShape(12.dp)
                 )
-                .padding(10.dp)
+                .clickable { 
+                    AIRepository.createNewSession()
+                    onNavigate(ZenithScreen.AI)
+                }
+                .border(1.dp, Color(0xFF818CF8).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
-                        .background(Color(0xFF818CF8).copy(alpha = 0.1f), CircleShape),
+                        .size(36.dp)
+                        .background(Color(0xFF818CF8).copy(alpha = 0.2f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.ChatBubble, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(18.dp))
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Stretch for 5 mins?",
-                    color = Color.White,
-                    fontSize = 13.sp
-                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text("New AI Conversation", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Start a fresh secure chat", color = Color.Gray, fontSize = 11.sp)
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
             }
         }
         
@@ -1096,15 +1117,47 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        Text("MODULES", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Spacer(modifier = Modifier.height(12.dp))
+        // Modules section moved to right panel as per user request
+
         
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SidebarItem(Icons.Default.Done, "Tasks", currentScreen == ZenithScreen.Tasks) { onNavigate(ZenithScreen.Tasks) }
-            SidebarItem(Icons.Default.Edit, "Notes", currentScreen == ZenithScreen.Notes) { onNavigate(ZenithScreen.Notes) }
-            SidebarItem(Icons.Default.Lock, "Secure Vault", currentScreen == ZenithScreen.Vault) { onNavigate(ZenithScreen.Vault) }
-            SidebarItem(Icons.Default.Notifications, "Alarms", currentScreen == ZenithScreen.Alarm) { onNavigate(ZenithScreen.Alarm) }
-            SidebarItem(Icons.Default.Schedule, "Reminders", currentScreen == ZenithScreen.Reminder) { onNavigate(ZenithScreen.Reminder) }
+        // AI History Section
+        if (AIRepository.sessions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("AI HISTORY", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                AIRepository.sessions.take(5).forEach { session ->
+                    val isActive = AIRepository.currentSession.value.id == session.id && currentScreen == ZenithScreen.AI
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isActive) Color(0xFF818CF8).copy(alpha = 0.1f) else Color.Transparent)
+                            .clickable { 
+                                AIRepository.switchSession(session)
+                                onNavigate(ZenithScreen.AI)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.ChatBubbleOutline, 
+                            contentDescription = null, 
+                            tint = if (isActive) Color(0xFF818CF8) else Color.Gray.copy(alpha = 0.4f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = session.title,
+                            color = if (isActive) Color.White else Color.Gray,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
         }
         
         Spacer(modifier = Modifier.weight(1f))
@@ -1116,7 +1169,7 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
 }
 
 @Composable
-fun RightSidebarContent(onClose: () -> Unit) {
+fun RightSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -> Unit, onClose: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxHeight()
@@ -1156,6 +1209,19 @@ fun RightSidebarContent(onClose: () -> Unit) {
         Spacer(modifier = Modifier.height(12.dp))
         SidebarItem(Icons.Default.Star, "Achievements", false) { /* Action */ }
         SidebarItem(Icons.Default.Settings, "Account Settings", false) { /* Action */ }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text("MODULES", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            SidebarItem(Icons.Default.Done, "Tasks", currentScreen == ZenithScreen.Tasks) { onNavigate(ZenithScreen.Tasks) }
+            SidebarItem(Icons.Default.Edit, "Notes", currentScreen == ZenithScreen.Notes) { onNavigate(ZenithScreen.Notes) }
+            SidebarItem(Icons.Default.Lock, "Secure Vault", currentScreen == ZenithScreen.Vault) { onNavigate(ZenithScreen.Vault) }
+            SidebarItem(Icons.Default.Notifications, "Alarms", currentScreen == ZenithScreen.Alarm) { onNavigate(ZenithScreen.Alarm) }
+            SidebarItem(Icons.Default.Schedule, "Reminders", currentScreen == ZenithScreen.Reminder) { onNavigate(ZenithScreen.Reminder) }
+        }
     }
 }
 

@@ -149,8 +149,8 @@ fun TaskListScreen() {
         AddTaskModal(
             initialCategory = if (selectedCategory == "All") "Work" else selectedCategory,
             onDismiss = { showAddTaskModal = false },
-            onTaskCreated = { title, category, priority ->
-                TasksRepository.addTask(title, category, priority)
+            onTaskCreated = { title, cat, prio, desc, est, energy ->
+                TasksRepository.addTask(title, cat, prio, desc, est, energy)
                 showAddTaskModal = false
             }
         )

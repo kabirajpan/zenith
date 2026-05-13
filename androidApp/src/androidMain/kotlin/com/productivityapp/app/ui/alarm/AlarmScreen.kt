@@ -31,7 +31,9 @@ data class AlarmItem(
     val time: String,
     val label: String,
     val days: List<String>,
-    val isEnabled: Boolean
+    val isEnabled: Boolean,
+    val escalationType: String = "Standard", // Gentle, Standard, Urgent
+    val isHighPriority: Boolean = false
 )
 
 @Composable
