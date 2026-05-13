@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -353,8 +354,8 @@ fun QuickActionsModal(onClose: () -> Unit, onAction: (String) -> Unit) {
                     Triple(Icons.Default.Edit, "Note", { onAction("Note") }),
                     Triple(Icons.Default.CheckCircle, "Task", { onAction("Task") }),
                     Triple(Icons.Default.Lock, "Vault", { onAction("Vault") }),
-                    Triple(Icons.Default.NotificationsActive, "Alarm", { onAction("Alarm") }),
                     Triple(Icons.Default.Brush, "Draw", { onAction("Draw") }),
+                    Triple(Icons.Default.NotificationsActive, "Alarm", { onAction("Alarm") }),
                     Triple(Icons.Default.Notifications, "Reminder", { onAction("Reminder") })
                 )
                 
@@ -362,8 +363,8 @@ fun QuickActionsModal(onClose: () -> Unit, onAction: (String) -> Unit) {
                     Color(0xFF818CF8), // Note (Indigo)
                     Color(0xFF818CF8), // Task (Indigo)
                     Color(0xFF22C55E), // Vault (Green)
-                    Color(0xFFFBBF24), // Alarm (Gold)
                     Color(0xFF60A5FA), // Draw (Blue)
+                    Color(0xFFFBBF24), // Alarm (Gold)
                     Color(0xFF818CF8)  // Reminder (Indigo)
                 )
                 
@@ -584,6 +585,7 @@ fun MainContent(onNavigate: (ZenithScreen) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(
@@ -668,6 +670,66 @@ fun MainContent(onNavigate: (ZenithScreen) -> Unit) {
                     DashboardTaskRow(task)
                 }
             }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // 3x3 Module Grid Launcher
+        ModuleGrid(onNavigate = onNavigate)
+        
+        Spacer(modifier = Modifier.height(40.dp))
+    }
+}
+
+@Composable
+fun ModuleGrid(onNavigate: (ZenithScreen) -> Unit) {
+    val modules = listOf(
+        Triple(Icons.Default.Done, "Tasks", ZenithScreen.Tasks),
+        Triple(Icons.Default.Edit, "Notes", ZenithScreen.Notes),
+        Triple(Icons.Default.Lock, "Vault", ZenithScreen.Vault),
+        Triple(Icons.Default.NotificationsActive, "Alarms", ZenithScreen.Alarm),
+        Triple(Icons.Default.Schedule, "Reminders", ZenithScreen.Reminder),
+        Triple(Icons.Default.Star, "AI Nexus", ZenithScreen.AI),
+        Triple(Icons.Default.Brush, "Draw", ZenithScreen.Draw),
+        Triple(Icons.Default.Settings, "Settings", ZenithScreen.Settings),
+        Triple(Icons.Default.Dashboard, "Home", ZenithScreen.Dashboard)
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("MODULES", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        val rows = modules.chunked(3)
+        rows.forEach { rowModules ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowModules.forEach { (icon, label, screen) ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        ModuleGridItem(icon, label) { onNavigate(screen) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModuleGridItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(85.dp).clickable { onClick() },
+        color = Color.White.copy(alpha = 0.04f),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -1085,7 +1147,7 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
             .fillMaxHeight()
             .width(260.dp)
             .background(Color(0xFF0F172A))
-            .padding(horizontal = 8.dp)
+            .padding(horizontal = 16.dp)
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
         Spacer(modifier = Modifier.height(16.dp))
@@ -1104,7 +1166,7 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        // Separate Style for Dashboard
+        // 1. Dashboard (Same as it was)
         val isDashboard = currentScreen == ZenithScreen.Dashboard
         Box(
             modifier = Modifier
@@ -1147,20 +1209,16 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
                 }
             }
         }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Modules section moved to right panel as per user request
 
-        
-        // AI History Section
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 2. Chat History
         if (AIRepository.sessions.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(24.dp))
             Text("AI HISTORY", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Spacer(modifier = Modifier.height(12.dp))
             
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AIRepository.sessions.take(5).forEach { session ->
+                AIRepository.sessions.take(4).forEach { session ->
                     val isActive = AIRepository.currentSession.value.id == session.id && currentScreen == ZenithScreen.AI
                     Row(
                         modifier = Modifier
@@ -1193,8 +1251,76 @@ fun LeftSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) -
             }
         }
         
+        // Push navigation grid to bottom
         Spacer(modifier = Modifier.weight(1f))
         
+        // 3. Navigation Grid (Bottom Side, Top of Settings)
+        Text("NAVIGATION", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        val navItems = listOf(
+            Triple(Icons.Default.Edit, "Notes", Color(0xFF818CF8) to ZenithScreen.Notes),
+            Triple(Icons.Default.CheckCircle, "Tasks", Color(0xFF818CF8) to ZenithScreen.Tasks),
+            Triple(Icons.Default.Lock, "Vault", Color(0xFF22C55E) to ZenithScreen.Vault),
+            Triple(Icons.Default.Brush, "Draw", Color(0xFF60A5FA) to ZenithScreen.Draw),
+            Triple(Icons.Default.NotificationsActive, "Alarm", Color(0xFFFBBF24) to ZenithScreen.Alarm),
+            Triple(Icons.Default.Schedule, "Reminders", Color(0xFF818CF8) to ZenithScreen.Reminder)
+        )
+        
+        val rows = navItems.chunked(3)
+        rows.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                rowItems.forEach { (icon, label, pair) ->
+                    val (color, screen) = pair
+                    val isActive = currentScreen == screen
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onNavigate(screen) }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    if (isActive) color else color.copy(alpha = 0.08f),
+                                    CircleShape
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isActive) color else color.copy(alpha = 0.15f),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                icon, 
+                                contentDescription = null, 
+                                tint = if (isActive) Color.White else color,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = label,
+                            color = if (isActive) Color.White else Color.Gray,
+                            fontSize = 8.sp,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // 4. Settings
         SidebarItem(Icons.Default.Settings, "Settings", currentScreen == ZenithScreen.Settings) { onNavigate(ZenithScreen.Settings) }
         Spacer(modifier = Modifier.navigationBarsPadding())
         Spacer(modifier = Modifier.height(16.dp))
@@ -1243,18 +1369,12 @@ fun RightSidebarContent(currentScreen: ZenithScreen, onNavigate: (ZenithScreen) 
         SidebarItem(Icons.Default.Star, "Achievements", false) { /* Action */ }
         SidebarItem(Icons.Default.Settings, "Account Settings", false) { /* Action */ }
         
+        // Modules section removed (moved to left)
         Spacer(modifier = Modifier.height(32.dp))
-        
-        Text("MODULES", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("SYSTEM", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Spacer(modifier = Modifier.height(12.dp))
-        
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SidebarItem(Icons.Default.Done, "Tasks", currentScreen == ZenithScreen.Tasks) { onNavigate(ZenithScreen.Tasks) }
-            SidebarItem(Icons.Default.Edit, "Notes", currentScreen == ZenithScreen.Notes) { onNavigate(ZenithScreen.Notes) }
-            SidebarItem(Icons.Default.Lock, "Secure Vault", currentScreen == ZenithScreen.Vault) { onNavigate(ZenithScreen.Vault) }
-            SidebarItem(Icons.Default.Notifications, "Alarms", currentScreen == ZenithScreen.Alarm) { onNavigate(ZenithScreen.Alarm) }
-            SidebarItem(Icons.Default.Schedule, "Reminders", currentScreen == ZenithScreen.Reminder) { onNavigate(ZenithScreen.Reminder) }
-        }
+        SidebarItem(Icons.Default.CloudQueue, "Cloud Sync", false) { /* Action */ }
+        SidebarItem(Icons.Default.Security, "Privacy", false) { /* Action */ }
     }
 }
 
