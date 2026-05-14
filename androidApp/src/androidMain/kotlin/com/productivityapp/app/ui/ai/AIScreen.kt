@@ -30,6 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import com.productivityapp.app.ui.vault.VaultItem
+import com.productivityapp.app.ui.ai.widgets.UniversalActionCard
+import com.productivityapp.app.ui.ai.widgets.UniversalWidgetAssembler
+import com.productivityapp.app.ui.ai.widgets.HeaderSection
+import com.productivityapp.app.ui.ai.widgets.SectionDivider
 import com.productivityapp.shared.ai.AIService
 import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.vault.VaultRepository
@@ -351,22 +355,20 @@ fun ZenithChatBubble(message: ChatMessage) {
                     
                     val onDismiss = { message.isProcessed = true }
 
-                    // Dispatch to domain-specific widget
-                    when (message.proposedAction.module) {
-                        "Tasks" -> TaskActionWidget(message.proposedAction, onConfirm, onDismiss)
-                        "Reminders" -> ReminderActionWidget(message.proposedAction, onConfirm, onDismiss)
-                        "Vault" -> {} // Handled by secureItem block or special vault action
-                        "Notes" -> NoteActionWidget(message.proposedAction, onConfirm, onDismiss)
-                        "Alarms" -> AlarmActionWidget(message.proposedAction, onConfirm, onDismiss)
-                        else -> {
-                            // Fallback for general types if module is missing
-                            when (message.proposedAction.type) {
-                                ActionType.CREATE -> TaskActionWidget(message.proposedAction, onConfirm, onDismiss)
-                                ActionType.CREATE_REMINDER -> ReminderActionWidget(message.proposedAction, onConfirm, onDismiss)
-                                ActionType.ADD_NOTE_BLOCK -> NoteActionWidget(message.proposedAction, onConfirm, onDismiss)
-                                else -> {}
-                            }
+                    // Universal High-Performance Widget System
+                    if (message.secureItem != null) {
+                        UniversalActionCard {
+                            HeaderSection(icon = Icons.Default.Lock, title = "Vault", action = "REVEAL SECURE")
+                            SectionDivider()
+                            VaultSecureRevealWidget(message = message, onProcessed = { onConfirm(message.proposedAction) })
                         }
+                    } else {
+                        UniversalWidgetAssembler(
+                            action = message.proposedAction,
+                            isProcessed = message.isProcessed,
+                            onConfirm = { onConfirm(message.proposedAction) },
+                            onDismiss = onDismiss
+                        )
                     }
                 }
             }
@@ -549,87 +551,79 @@ fun buildSynthesisPrompt(retrievedContext: String): String {
 }
 
 fun processResponse(response: String, messages: MutableList<ChatMessage>) {
+    // 1. Scrub technical "flavor" metadata
+    var cleanText = response
+        .lines()
+        .filterNot { it.trim().startsWith("[SYSTEM STATUS:") || it.trim().startsWith("[USER STATUS:") }
+        .joinToString("\n")
+        .trim()
+
     val revealPattern = Regex("\\[REVEAL: (.*?)\\]")
     val createPattern = Regex("\\[CREATE: (.*?), (.*?)\\]")
     val updatePattern = Regex("\\[UPDATE: (.*?), (.*?), (.*?)\\]")
     val deletePattern = Regex("\\[DELETE: (.*?), (.*?)\\]")
     val togglePattern = Regex("\\[TOGGLE: (.*?), (.*?)\\]")
-    val noteBlockPattern = Regex("\\[ADD_NOTE_BLOCK: (.*?), (.*?), (.*?)\\]")
 
-    val revealMatch = revealPattern.find(response)
-    val createMatch = createPattern.find(response)
-    val updateMatch = updatePattern.find(response)
-    val deleteMatch = deletePattern.find(response)
-    val toggleMatch = togglePattern.find(response)
-    val noteBlockMatch = noteBlockPattern.find(response)
+    val revealMatch = revealPattern.find(cleanText)
+    val createMatch = createPattern.find(cleanText)
+    val updateMatch = updatePattern.find(cleanText)
+    val deleteMatch = deletePattern.find(cleanText)
+    val toggleMatch = togglePattern.find(cleanText)
     
+    // 2. Extract action and hide the tag from the user completely
+    var proposedAction: ProposedAction? = null
+    var secureItem: VaultItem? = null
+
     when {
         revealMatch != null -> {
             val siteName = revealMatch.groupValues[1].trim()
-            val cleanText = response.replace(revealMatch.value, "reveal it below")
-            val vaultItem = VaultRepository.vaultItems.find { 
+            cleanText = cleanText.replace(revealMatch.value, "").trim()
+            secureItem = VaultRepository.vaultItems.find { 
                 it.title.contains(siteName, ignoreCase = true) || siteName.contains(it.title, ignoreCase = true)
             }
-            messages.add(ChatMessage(text = cleanText, isUser = false, secureItem = vaultItem))
         }
         createMatch != null -> {
             val module = createMatch.groupValues[1].trim()
             val title = createMatch.groupValues[2].trim()
-            val cleanText = response.replace(createMatch.value, "").trim()
-            messages.add(ChatMessage(
-                text = cleanText,
-                isUser = false,
-                proposedAction = ProposedAction(
-                    type = if (module == "Reminders") ActionType.CREATE_REMINDER else ActionType.CREATE,
-                    module = module,
-                    title = title
-                )
-            ))
+            cleanText = cleanText.replace(createMatch.value, "").trim()
+            proposedAction = ProposedAction(
+                type = if (module == "Reminders") ActionType.CREATE_REMINDER else ActionType.CREATE,
+                module = module,
+                title = title
+            )
         }
         updateMatch != null -> {
             val module = updateMatch.groupValues[1].trim()
             val id = updateMatch.groupValues[2].trim()
             val newTitle = updateMatch.groupValues[3].trim()
-            messages.add(ChatMessage(
-                text = response.replace(updateMatch.value, "").trim(),
-                isUser = false,
-                proposedAction = ProposedAction(type = ActionType.UPDATE, module = module, targetId = id, title = newTitle)
-            ))
+            cleanText = cleanText.replace(updateMatch.value, "").trim()
+            proposedAction = ProposedAction(type = ActionType.UPDATE, module = module, targetId = id, title = newTitle)
         }
+        // ... Handle others similarly if needed
         deleteMatch != null -> {
             val module = deleteMatch.groupValues[1].trim()
             val id = deleteMatch.groupValues[2].trim()
-            messages.add(ChatMessage(
-                text = response.replace(deleteMatch.value, "").trim(),
-                isUser = false,
-                proposedAction = ProposedAction(type = ActionType.DELETE, module = module, targetId = id)
-            ))
+            cleanText = cleanText.replace(deleteMatch.value, "").trim()
+            proposedAction = ProposedAction(type = ActionType.DELETE, module = module, targetId = id)
         }
         toggleMatch != null -> {
             val module = toggleMatch.groupValues[1].trim()
             val id = toggleMatch.groupValues[2].trim()
-            messages.add(ChatMessage(
-                text = response.replace(toggleMatch.value, "").trim(),
-                isUser = false,
-                proposedAction = ProposedAction(type = ActionType.TOGGLE, module = module, targetId = id)
-            ))
-        }
-        noteBlockMatch != null -> {
-            val cleanText = response.replace(noteBlockMatch.value, "").trim()
-            messages.add(ChatMessage(
-                text = cleanText,
-                isUser = false,
-                proposedAction = ProposedAction(
-                    type = ActionType.ADD_NOTE_BLOCK,
-                    module = "Notes",
-                    blockType = noteBlockMatch.groupValues[1].trim(),
-                    title = noteBlockMatch.groupValues[2].trim(),
-                    blockContent = noteBlockMatch.groupValues[3].trim()
-                )
-            ))
-        }
-        else -> {
-            messages.add(ChatMessage(text = response, isUser = false))
+            cleanText = cleanText.replace(toggleMatch.value, "").trim()
+            proposedAction = ProposedAction(type = ActionType.TOGGLE, module = module, targetId = id)
         }
     }
+
+    cleanText = cleanText
+        .lines()
+        .filterNot { it.contains("AVAILABLE INTERFACE TAGS") || it.contains("[REQUEST:") || it.contains("[COMMAND]") || it.contains("INTERFACE TAG SELECTION") }
+        .joinToString("\n")
+        .trim()
+
+    messages.add(ChatMessage(
+        text = cleanText,
+        isUser = false,
+        proposedAction = proposedAction ?: ProposedAction(ActionType.NONE, "Unknown"),
+        secureItem = secureItem
+    ))
 }

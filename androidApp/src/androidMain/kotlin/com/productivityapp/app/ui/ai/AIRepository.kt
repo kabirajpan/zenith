@@ -6,7 +6,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.productivityapp.app.ui.vault.VaultItem
 
 enum class ActionType {
-    CREATE, TOGGLE, DELETE, CREATE_REMINDER, ADD_NOTE_BLOCK,
+    NONE, CREATE, TOGGLE, DELETE, CREATE_REMINDER, ADD_NOTE_BLOCK,
     UPDATE, RENAME, EDIT, REVEAL
 }
 
