@@ -4,8 +4,8 @@ import androidx.compose.runtime.mutableStateListOf
 
 object VaultRepository {
     val vaultItems = mutableStateListOf<VaultItem>(
-        VaultItem(site = "Netflix", username = "user@example.com", password = "SecurePassword123", category = "Social", description = "Netflix streaming account"),
-        VaultItem(site = "Google", username = "dev.productivity@gmail.com", password = "GoogleSafePass!88", category = "Work", description = "Main work email account")
+        VaultItem(type = VaultType.PASSWORD, title = "Netflix", encryptedData = "user@example.com:SecurePassword123", icon = "Netflix"),
+        VaultItem(type = VaultType.PASSWORD, title = "Google", encryptedData = "dev.productivity@gmail.com:GoogleSafePass!88", icon = "Google")
     )
 
     fun addVaultItem(item: VaultItem) {
@@ -18,10 +18,10 @@ object VaultRepository {
 
     fun searchVault(query: String): List<VaultItem> {
         val lowQuery = query.lowercase().trim()
-        if (lowQuery.isBlank() || lowQuery == "password" || lowQuery == "passwords" || lowQuery == "vault" || lowQuery == "all") return vaultItems.toList()
+        if (lowQuery.isBlank() || lowQuery == "all") return vaultItems.toList()
         return vaultItems.filter { 
-            it.site.lowercase().contains(lowQuery) || 
-            it.description.lowercase().contains(lowQuery) 
+            it.title.lowercase().contains(lowQuery) || 
+            it.type.name.lowercase().contains(lowQuery) 
         }
     }
 }

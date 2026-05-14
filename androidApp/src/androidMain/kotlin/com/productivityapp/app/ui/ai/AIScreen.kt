@@ -242,7 +242,7 @@ fun executeTool(type: String, query: String): String {
             val results = VaultRepository.searchVault(query)
             if (results.isEmpty()) "No matching records found in Secure Vault for '$query'."
             else "FOUND SECURE METADATA (Passwords are HIDDEN and REDACTED from your context for security):\n" + results.joinToString("\n") { 
-                "- SITE: ${it.site}, USER: ${it.username}, DESC: ${it.description} (Category: ${it.category})" 
+                "- TITLE: ${it.title}, TYPE: ${it.type.name}, DATA: [REDACTED]" 
             }
         }
         else -> "Unknown tool called."
@@ -568,7 +568,7 @@ fun processResponse(response: String, messages: MutableList<ChatMessage>) {
             val siteName = revealMatch.groupValues[1].trim()
             val cleanText = response.replace(revealMatch.value, "reveal it below")
             val vaultItem = VaultRepository.vaultItems.find { 
-                it.site.contains(siteName, ignoreCase = true) || siteName.contains(it.site, ignoreCase = true)
+                it.title.contains(siteName, ignoreCase = true) || siteName.contains(it.title, ignoreCase = true)
             }
             messages.add(ChatMessage(text = cleanText, isUser = false, secureItem = vaultItem))
         }

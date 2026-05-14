@@ -55,8 +55,8 @@ fun VaultSecureRevealWidget(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
-                    Text(secureItem.site, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text(secureItem.username, color = Color.Gray, fontSize = 11.sp)
+                    Text(secureItem.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(secureItem.type.name, color = Color.Gray, fontSize = 11.sp)
                 }
             }
             
@@ -79,7 +79,7 @@ fun VaultSecureRevealWidget(
                         .fillMaxWidth()
                         .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
                         .clickable { 
-                            clipboardManager.setText(AnnotatedString(secureItem.password))
+                            clipboardManager.setText(AnnotatedString(secureItem.encryptedData))
                             onProcessed()
                         }
                         .padding(vertical = 10.dp, horizontal = 12.dp),
@@ -87,7 +87,7 @@ fun VaultSecureRevealWidget(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = secureItem.password,
+                            text = secureItem.encryptedData,
                             color = Color.White,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,

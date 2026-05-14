@@ -30,9 +30,9 @@ fun VaultScreen() {
     
     val filteredItems = remember(searchQuery, selectedCategory, vaultItems.size) {
         vaultItems.filter { item ->
-            val matchesSearch = item.site.contains(searchQuery, ignoreCase = true) || 
-                               item.username.contains(searchQuery, ignoreCase = true)
-            val matchesCategory = selectedCategory == "All" || item.category == selectedCategory
+            val matchesSearch = item.title.contains(searchQuery, ignoreCase = true) || 
+                               item.encryptedData.contains(searchQuery, ignoreCase = true)
+            val matchesCategory = selectedCategory == "All" || item.type.name.equals(selectedCategory, ignoreCase = true)
             matchesSearch && matchesCategory
         }
     }
@@ -146,7 +146,7 @@ fun VaultScreen() {
 
 @Composable
 fun VaultCard(item: VaultItem) {
-    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isDataVisible by remember { mutableStateOf(false) }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     
     Surface(
@@ -159,43 +159,66 @@ fun VaultCard(item: VaultItem) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon Placeholder with Green Accent
+            // Icon / Type Placeholder
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .background(Color(0xFF22C55E).copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(item.site.take(1), color = Color(0xFF22C55E), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                if (item.icon.isNotEmpty()) {
+                    Text(item.icon.take(1), color = Color(0xFF22C55E), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(
+                        imageVector = when(item.type) {
+                            VaultType.PASSWORD -> Icons.Default.VpnKey
+                            VaultType.CARD -> Icons.Default.CreditCard
+                            VaultType.NOTE -> Icons.Default.Notes
+                            VaultType.ID -> Icons.Default.Badge
+                        },
+                        contentDescription = null,
+                        tint = Color(0xFF22C55E),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(16.dp))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.site, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = item.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    if (item.isFavorite) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(14.dp))
+                    }
+                }
+                if (item.username.isNotEmpty()) {
+                    Text(text = item.username, color = Color.Gray.copy(alpha = 0.7f), fontSize = 11.sp)
+                }
                 Text(
-                    text = if (isPasswordVisible) item.password else "••••••••", 
+                    text = if (isDataVisible) item.encryptedData else "••••••••", 
                     color = Color.Gray, 
                     fontSize = 13.sp
                 )
             }
             
             Row {
-                IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                IconButton(onClick = { isDataVisible = !isDataVisible }) {
                     Icon(
-                        imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        imageVector = if (isDataVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = "Toggle Visibility",
-                        tint = if (isPasswordVisible) Color(0xFF22C55E) else Color.Gray,
+                        tint = if (isDataVisible) Color(0xFF22C55E) else Color.Gray,
                         modifier = Modifier.size(20.dp)
                     )
                 }
                 
                 IconButton(onClick = { 
-                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(item.password))
+                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(item.encryptedData))
                 }) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy Password",
+                        contentDescription = "Copy",
                         tint = Color.Gray.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp)
                     )
@@ -205,78 +228,119 @@ fun VaultCard(item: VaultItem) {
     }
 }
 
+enum class VaultType { PASSWORD, CARD, NOTE, ID }
+
 data class VaultItem(
     val id: String = java.util.UUID.randomUUID().toString(),
-    val site: String,
-    val username: String,
-    val password: String,
-    val category: String,
-    val description: String = "",
-    val isAiSearchable: Boolean = true
+    val type: VaultType = VaultType.PASSWORD,
+    val title: String,
+    val username: String = "", // For passwords/emails
+    val encryptedData: String, // For the secret password, card details, or note
+    val icon: String = "",
+    val isFavorite: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 val dummyVaultItems = emptyList<VaultItem>()
 
 @Composable
 fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
-    var site by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Social") }
-    val categories = listOf("Social", "Work", "Finance")
+    var encryptedData by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf(VaultType.PASSWORD) }
+    var isFavorite by remember { mutableStateOf(false) }
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.85f),
+            modifier = Modifier.fillMaxWidth(0.92f),
             color = Color(0xFF0F172A),
             shape = RoundedCornerShape(24.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(Color(0xFF22C55E), CircleShape))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text("Secure Entry", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
                 
-                VaultInputField(label = "Account / Site", value = site, onValueChange = { site = it })
-                VaultInputField(label = "Username / ID", value = username, onValueChange = { username = it })
-                VaultInputField(label = "Password / Secret", value = password, onValueChange = { password = it }, isPassword = true)
-                VaultInputField(label = "Internal Notes (AI Searchable)", value = description, onValueChange = { description = it })
+                VaultInputField(label = "NAME", value = title, onValueChange = { title = it }, placeholder = "netflix")
+                VaultInputField(label = "USERNAME / EMAIL", value = username, onValueChange = { username = it }, placeholder = "mail id")
+                VaultInputField(label = "PASSWORD", value = encryptedData, onValueChange = { encryptedData = it }, isPassword = true, placeholder = "pw")
                 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    categories.forEach { cat ->
-                        val isSelected = category == cat
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Color(0xFF22C55E).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
-                                .clickable { category = cat }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
+                // Fused Type Selection
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    Text("VAULT TYPE", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color.White.copy(alpha = 0.03f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = cat, 
-                                color = if (isSelected) Color(0xFF22C55E) else Color.Gray, 
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                            VaultType.values().forEach { type ->
+                                val isSelected = selectedType == type
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) Color(0xFF22C55E).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                        .clickable { selectedType = type },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = type.name, 
+                                        color = if (isSelected) Color(0xFF22C55E) else Color.Gray, 
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(4.dp))
+
+                // Fused Favorite Row
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White.copy(alpha = 0.03f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = if (isFavorite) Color(0xFFFBBF24) else Color.Gray, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Mark as Favorite", color = Color.White, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = isFavorite,
+                            onCheckedChange = { isFavorite = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFF22C55E),
+                                checkedTrackColor = Color(0xFF22C55E).copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+                }
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -294,8 +358,15 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
                     
                     Button(
                         onClick = { 
-                            if (site.isNotBlank() && username.isNotBlank()) {
-                                onAdd(VaultItem(site = site, username = username, password = password, category = category, description = description))
+                            if (title.isNotBlank() && encryptedData.isNotBlank()) {
+                                onAdd(VaultItem(
+                                    type = selectedType,
+                                    title = title,
+                                    username = username,
+                                    encryptedData = encryptedData,
+                                    isFavorite = isFavorite,
+                                    icon = title
+                                ))
                             }
                         },
                         modifier = Modifier.weight(0.6f),
@@ -304,11 +375,11 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
                             disabledBackgroundColor = Color(0xFF22C55E)
                         ),
                         shape = RoundedCornerShape(10.dp),
-                        enabled = site.isNotBlank() && username.isNotBlank()
+                        enabled = title.isNotBlank() && encryptedData.isNotBlank()
                     ) {
                         Text(
                             "Save Entry", 
-                            color = if (site.isNotBlank() && username.isNotBlank()) Color.White else Color.White.copy(alpha = 0.5f), 
+                            color = if (title.isNotBlank() && encryptedData.isNotBlank()) Color.White else Color.White.copy(alpha = 0.5f), 
                             fontSize = 12.sp, 
                             fontWeight = FontWeight.Bold
                         )
@@ -320,22 +391,29 @@ fun AddVaultItemModal(onDismiss: () -> Unit, onAdd: (VaultItem) -> Unit) {
 }
 
 @Composable
-fun VaultInputField(label: String, value: String, onValueChange: (String) -> Unit, isPassword: Boolean = false) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+fun VaultInputField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String = "", isPassword: Boolean = false) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Text(label.uppercase(), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(4.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.04f),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(8.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.03f))
         ) {
-            androidx.compose.foundation.text.BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 13.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF22C55E)),
-                modifier = Modifier.padding(10.dp).fillMaxWidth()
-            )
+            Box(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
+                if (value.isEmpty()) {
+                    Text(placeholder, color = Color.Gray.copy(alpha = 0.4f), fontSize = 11.sp)
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF22C55E)),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
