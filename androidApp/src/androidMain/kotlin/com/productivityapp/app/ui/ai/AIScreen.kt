@@ -356,19 +356,22 @@ fun ZenithChatBubble(message: ChatMessage) {
                     val onDismiss = { message.isProcessed = true }
 
                     // Universal High-Performance Widget System
-                    if (message.secureItem != null) {
-                        UniversalActionCard {
-                            HeaderSection(icon = Icons.Default.Lock, title = "Vault", action = "REVEAL SECURE")
-                            SectionDivider()
-                            VaultSecureRevealWidget(message = message, onProcessed = { onConfirm(message.proposedAction) })
+                    when {
+                        message.secureItem != null -> {
+                            UniversalActionCard {
+                                HeaderSection(icon = Icons.Default.Lock, title = "Vault", action = "REVEAL SECURE")
+                                SectionDivider()
+                                VaultSecureRevealWidget(message = message, onProcessed = { onConfirm(message.proposedAction) })
+                            }
                         }
-                    } else {
-                        UniversalWidgetAssembler(
-                            action = message.proposedAction,
-                            isProcessed = message.isProcessed,
-                            onConfirm = { onConfirm(message.proposedAction) },
-                            onDismiss = onDismiss
-                        )
+                        message.proposedAction.type != ActionType.NONE -> {
+                            UniversalWidgetAssembler(
+                                action = message.proposedAction,
+                                isProcessed = message.isProcessed,
+                                onConfirm = { onConfirm(message.proposedAction) },
+                                onDismiss = onDismiss
+                            )
+                        }
                     }
                 }
             }
