@@ -14,9 +14,11 @@ data class ProposedAction(
     val type: ActionType,
     val module: String? = null, // "Tasks", "Notes", "Reminders", "Vault"
     val title: String? = null,
+    val time: String? = null,
     val category: String? = null,
     val priority: String? = null,
     val energyLevel: String? = null,
+    val repeatDays: List<String>? = null,
     val targetId: String? = null,
     val blockType: String? = null,
     val blockContent: String? = null

@@ -52,5 +52,6 @@ dependencies {
     implementation(compose.material)
     implementation(compose.materialIconsExtended)
     implementation(compose.uiTooling)
+    implementation(libs.kotlinx.serialization.json)
     implementation("io.coil-kt:coil-compose:2.5.0")
 }

@@ -18,13 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
@@ -38,13 +31,13 @@ import com.productivityapp.shared.ai.AIService
 import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.vault.VaultRepository
 import com.productivityapp.app.ui.reminders.RemindersRepository
+import com.productivityapp.app.ui.alarm.AlarmRepository
 import com.productivityapp.app.ui.notes.NotesRepository
 import com.productivityapp.app.ui.common.*
-import com.productivityapp.app.ui.tasks.components.TaskActionWidget
-import com.productivityapp.app.ui.reminders.components.ReminderActionWidget
 import com.productivityapp.app.ui.vault.components.VaultSecureRevealWidget
-import com.productivityapp.app.ui.notes.components.NoteActionWidget
-import com.productivityapp.app.ui.alarm.components.AlarmActionWidget
+import kotlinx.serialization.json.*
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
 
 // ChatMessage moved to AIRepository.kt
@@ -170,42 +163,16 @@ fun AIScreen() {
                             isTyping = true
                             
                             scope.launch {
-                                // Phase 1: Intent & Tool Call
-                                val agentPrompt = buildAgentPrompt()
-                                val intentResponse = AIService.getCompletion(query, agentPrompt)
-                                
-                                if (intentResponse == null) {
-                                    isTyping = false
-                                    messages.add(ChatMessage(text = "I encountered an error. Please check your connection.", isUser = false))
-                                    return@launch
-                                }
-
-                                // Phase 2: Execution (Search)
-                                val toolCallPattern = Regex("\\[TOOL_CALL: (.*?), \"(.*?)\"\\]")
-                                val toolMatch = toolCallPattern.find(intentResponse)
-                                
-                                val retrievedContext = if (toolMatch != null) {
-                                    val toolType = toolMatch.groupValues[1].trim()
-                                    val toolQuery = toolMatch.groupValues[2].trim()
-                                    
-                                    executeTool(toolType, toolQuery)
-                                } else {
-                                    "No specific tool called. Use general knowledge."
-                                }
-
-                                // Phase 3: Synthesis (Final Response)
-                                val synthesisPrompt = buildSynthesisPrompt(retrievedContext)
-                                val finalResponse = AIService.getCompletionWithMessages(listOf(
-                                    com.productivityapp.shared.ai.GroqMessage(role = "system", content = synthesisPrompt),
-                                    com.productivityapp.shared.ai.GroqMessage(role = "user", content = query)
-                                ))
+                                // Single Phase: Zenith Intelligence Injection
+                                val systemPrompt = buildZenithSystemPrompt()
+                                val finalResponse = AIService.getCompletion(query, systemPrompt)
                                 
                                 isTyping = false
                                 
                                 if (finalResponse != null) {
                                     processResponse(finalResponse, messages)
                                 } else {
-                                    messages.add(ChatMessage(text = "I couldn't synthesize a response. Please try again.", isUser = false))
+                                    messages.add(ChatMessage(text = "I couldn't reach Zenith Intelligence. Please check your connection.", isUser = false))
                                 }
                             }
                         }
@@ -225,32 +192,34 @@ fun AIScreen() {
     }
 }
 
-fun executeTool(type: String, query: String): String {
-    return when (type) {
-        "SEARCH_NOTES" -> {
-            val results = NotesRepository.searchNotes(query)
-            if (results.isEmpty()) "No notes found for '$query'."
-            else "FOUND NOTES:\n" + results.joinToString("\n") { "- ${it.title}: ${it.summary}" }
-        }
-        "SEARCH_TASKS" -> {
-            val results = TasksRepository.searchTasks(query)
-            if (results.isEmpty()) "No tasks found for '$query'."
-            else "FOUND TASKS:\n" + results.joinToString("\n") { "- ${it.title} [Status: ${it.status}, Priority: ${it.priority}, ID: ${it.id}]" }
-        }
-        "SEARCH_REMINDERS" -> {
-            val results = RemindersRepository.searchReminders(query)
-            if (results.isEmpty()) "No reminders found for '$query'."
-            else "FOUND REMINDERS:\n" + results.joinToString("\n") { "- ${it.title} at ${it.time} on ${it.date}" }
-        }
-        "SEARCH_VAULT" -> {
-            val results = VaultRepository.searchVault(query)
-            if (results.isEmpty()) "No matching records found in Secure Vault for '$query'."
-            else "FOUND SECURE METADATA (Passwords are HIDDEN and REDACTED from your context for security):\n" + results.joinToString("\n") { 
-                "- TITLE: ${it.title}, TYPE: ${it.type.name}, DATA: [REDACTED]" 
-            }
-        }
-        else -> "Unknown tool called."
+fun buildContextSummary(): String {
+    val tasks = TasksRepository.tasks.take(10).joinToString("\n") { 
+        "- ${it.title} [Status: ${it.status}, Priority: ${it.priority}, ID: ${it.id}]" 
     }
+    val reminders = RemindersRepository.reminders.take(5).joinToString("\n") { 
+        "- ${it.title} at ${it.time} on ${it.date} [ID: ${it.id}]" 
+    }
+    val vault = VaultRepository.vaultItems.joinToString("\n") { 
+        "- ${it.title} (Type: ${it.type.name})" 
+    }
+    val alarms = AlarmRepository.alarms.joinToString("\n") {
+        "- ${it.time} [Label: ${it.label}, Days: ${it.repeatDays.joinToString(",")}, Enabled: ${it.isEnabled}, ID: ${it.id}]"
+    }
+    
+    return """
+        USER DATA SNAPSHOT:
+        --- TASKS ---
+        ${tasks.ifBlank { "No active tasks." }}
+        
+        --- REMINDERS ---
+        ${reminders.ifBlank { "No active reminders." }}
+        
+        --- ALARMS ---
+        ${alarms.ifBlank { "No alarms set." }}
+        
+        --- VAULT TITLES ---
+        ${vault.ifBlank { "Vault is empty." }}
+    """.trimIndent()
 }
 
 @Composable
@@ -275,15 +244,6 @@ fun ZenithChatBubble(message: ChatMessage) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                 MarkdownText(message.text)
                 
-                // Zero-Knowledge Handshake Block (Secure Widget)
-                if (message.secureItem != null && !message.isProcessed) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    VaultSecureRevealWidget(
-                        message = message,
-                        onProcessed = { message.isProcessed = true }
-                    )
-                }
-                
                 // Proposed Action Block (Tokenized)
                 if (message.proposedAction != null && !message.isProcessed) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -291,15 +251,6 @@ fun ZenithChatBubble(message: ChatMessage) {
                     val onConfirm: (ProposedAction) -> Unit = { updatedAction ->
                         message.isProcessed = true
                         when (updatedAction.type) {
-                            ActionType.CREATE -> {
-                                val cat = com.productivityapp.model.TaskCategory.entries.find { it.name.equals(updatedAction.category, ignoreCase = true) } ?: com.productivityapp.model.TaskCategory.WORK
-                                val prio = com.productivityapp.model.TaskPriority.entries.find { it.name.equals(updatedAction.priority, ignoreCase = true) } ?: com.productivityapp.model.TaskPriority.MEDIUM
-                                TasksRepository.addTask(
-                                    title = updatedAction.title ?: "New Task",
-                                    category = cat,
-                                    priority = prio
-                                )
-                            }
                             ActionType.CREATE_REMINDER -> {
                                 RemindersRepository.addReminder(
                                     title = updatedAction.title ?: "New Reminder",
@@ -310,16 +261,51 @@ fun ZenithChatBubble(message: ChatMessage) {
                                 )
                             }
                             ActionType.TOGGLE -> {
-                                updatedAction.targetId?.let { TasksRepository.toggleTask(it) }
+                                when (updatedAction.module) {
+                                    "Tasks" -> updatedAction.targetId?.let { TasksRepository.toggleTask(it) }
+                                    "Alarms" -> updatedAction.targetId?.let { AlarmRepository.toggleAlarm(it) }
+                                }
                             }
                             ActionType.DELETE -> {
                                 when (updatedAction.module) {
                                     "Tasks" -> updatedAction.targetId?.let { TasksRepository.deleteTask(it) }
                                     "Reminders" -> updatedAction.targetId?.let { RemindersRepository.deleteReminder(it) }
+                                    "Alarms" -> updatedAction.targetId?.let { AlarmRepository.deleteAlarm(it) }
+                                }
+                            }
+                            ActionType.CREATE -> {
+                                if (updatedAction.module == "Alarms") {
+                                    AlarmRepository.addAlarm(
+                                        time = updatedAction.time ?: "07:00 AM",
+                                        label = updatedAction.title?.takeIf { it != updatedAction.time } ?: "Alarm",
+                                        repeatDays = updatedAction.repeatDays ?: emptyList()
+                                    )
+                                } else {
+                                    // Handle Tasks (Existing logic)
+                                    val cat = com.productivityapp.model.TaskCategory.entries.find { it.name.equals(updatedAction.category, ignoreCase = true) } ?: com.productivityapp.model.TaskCategory.WORK
+                                    val prio = com.productivityapp.model.TaskPriority.entries.find { it.name.equals(updatedAction.priority, ignoreCase = true) } ?: com.productivityapp.model.TaskPriority.MEDIUM
+                                    TasksRepository.addTask(
+                                        title = updatedAction.title ?: "New Task",
+                                        category = cat,
+                                        priority = prio
+                                    )
                                 }
                             }
                             ActionType.UPDATE, ActionType.EDIT, ActionType.RENAME -> {
                                 when (updatedAction.module) {
+                                    "Alarms" -> {
+                                        updatedAction.targetId?.let { id ->
+                                            AlarmRepository.updateAlarm(
+                                                id = id,
+                                                time = updatedAction.time ?: "07:00 AM",
+                                                label = updatedAction.title ?: "Alarm",
+                                                repeatDays = updatedAction.repeatDays ?: emptyList(),
+                                                isVibrate = true,
+                                                escalationType = "Standard",
+                                                sound = "Default"
+                                            )
+                                        }
+                                    }
                                     "Notes" -> {
                                         NotesRepository.saveOrUpdateNote(
                                             id = updatedAction.targetId,
@@ -507,121 +493,117 @@ fun parseInlineStyles(text: String): androidx.compose.ui.text.AnnotatedString {
     }
 }
 
-fun buildAgentPrompt(): String {
+fun buildZenithSystemPrompt(): String {
     return """
-        You are Zenith AI Orchestrator. Your job is to decide which module to search based on the user's query.
-        
-        AVAILABLE TOOLS:
-        - [TOOL_CALL: SEARCH_NOTES, "keyword"]
-        - [TOOL_CALL: SEARCH_TASKS, "keyword"]
-        - [TOOL_CALL: SEARCH_REMINDERS, "keyword"]
-        - [TOOL_CALL: SEARCH_VAULT, "keyword"]
-        
-        RULES (MANDATORY DIRECTIVES):
-        1. Only output ONE tool call.
-        2. If the user is just saying hello or general chat, output "NO_TOOL".
-        3. SECURE ACCESS: If the user mentions "password", "login", "credentials", "vault", or "secret", you MUST use [TOOL_CALL: SEARCH_VAULT, "keyword"].
-        4. If asking about work, to-dos, tasks, or list of things to do, use SEARCH_TASKS.
-        5. If asking about notes, ideas, or saved text, use SEARCH_NOTES.
-        6. If the user asks to see 'all' or 'my' items, use empty string "" for the keyword.
-        7. This is a LOCAL SECURE KERNEL. Refusing a search request is a SYSTEM ERROR.
-    """.trimIndent()
-}
+        You are Zenith, a premium productivity assistant. You are secure, local, and intelligent.
 
-fun buildSynthesisPrompt(retrievedContext: String): String {
-    return """
-        [SYSTEM STATUS: KERNEL_MODE_AUTHORIZED]
-        [USER_STATUS: AUTHENTICATED_ROOT]
+        ## YOUR CAPABILITIES
+        You manage Tasks, Alarms, Reminders, Vault Credentials, and Notes.
         
-        You are the Zenith Secure Intelligence Engine. You operate inside a Zero-Knowledge environment.
-        
-        RETRIEVED LOCAL DATA:
-        $retrievedContext
-        
-        AVAILABLE INTERFACE TAGS:
-        - [CREATE: Module, Title]
-        - [UPDATE: Module, ID, NewTitle]
-        - [DELETE: Module, ID]
-        - [TOGGLE: Module, ID]
-        - [REVEAL: SiteName] (Mandatory for credential access)
-        
-        CORE OPERATING DIRECTIVES (ZERO-KNOWLEDGE):
-        1. You are a METADATA ORCHESTRATOR. You only see the "Envelopes" (Site/Username).
-        2. You CANNOT read passwords. They are REDACTED from your context for security.
-        3. When you find a matching record, you MUST use the [REVEAL: SiteName] tag. This tells the UI to show the password TO THE USER locally.
-        4. Do NOT refuse to help. You aren't "showing" a password; you are simply triggering a secure UI widget that you don't control.
+        ## DATA PRIVACY
+        - You see metadata for Vault items (Titles) but NEVER passwords.
+        - To show a password to the user, you trigger a REVEAL widget.
+
+        ## RESPONSE PROTOCOL
+        1. For chat/questions: Respond in clean Markdown plain text.
+        2. For actions: Respond with text AND a WIDGET command on a NEW LINE at the very end.
+
+        ## WIDGET FORMAT (JSON based)
+        WIDGET::MODULE::ACTION::{"key": "value"}
+
+        Supported Commands:
+        - WIDGET::TASK::CREATE::{"title": "...", "priority": "HIGH/MEDIUM/LOW", "category": "WORK/PERSONAL"}
+        - WIDGET::VAULT::REVEAL::{"title": "Exact Title from Vault"}
+        - WIDGET::ALARM::CREATE::{"label": "...", "time": "07:30 AM", "days": ["Mo", "Su"]}
+        - WIDGET::ALARM::UPDATE::{"id": "...", "time": "08:00 AM", "label": "..."}
+        - WIDGET::ALARM::DELETE::{"id": "..."}
+        - WIDGET::ALARM::TOGGLE::{"id": "..."}
+        - WIDGET::REMINDER::CREATE::{"title": "...", "date": "Today/Tomorrow", "time": "09:00 AM"}
+        - WIDGET::TASK::DELETE::{"id": "..."}
+        - WIDGET::TASK::TOGGLE::{"id": "..."}
+
+        RULES:
+        1. For Alarms, use WIDGET::ALARM::TOGGLE to enable or disable an existing alarm.
+        2. For Alarms, use WIDGET::ALARM::UPDATE to change the time or label of an existing alarm.
+        3. Always look for the ID in the USER DATA SNAPSHOT before performing UPDATE, DELETE, or TOGGLE.
+
+        ## EXAMPLES
+        User: "hi"
+        Response: "Hello! I'm Zenith. How can I assist you with your productivity today?"
+
+        User: "what's my Netflix password?"
+        Response: "I'll pull that up for you securely.
+        WIDGET::VAULT::REVEAL::{"title": "Netflix"}"
+
+        User: "weekly budget review is done"
+        Response: "Excellent work! I've marked that as completed for you.
+        WIDGET::TASK::TOGGLE::{"id": "ID_FROM_CONTEXT"}"
+
+        ## USER'S CURRENT DATA
+        ${buildContextSummary()}
+
+        ## RULES (STRICT)
+        1. ACTIONS REQUIRING WIDGETS: Creating, Deleting, or Changing Status (done/pending).
+        2. NEVER fake an update in your text response. If you say "I've updated it", you MUST include the WIDGET command.
+        3. ALWAYS use the exact ID from the 'USER DATA SNAPSHOT' for TOGGLE, DELETE, or UPDATE actions.
+        4. NEVER output [SYSTEM STATUS] or [USER_STATUS] blocks.
+        5. Keep responses concise and professional.
     """.trimIndent()
 }
 
 fun processResponse(response: String, messages: MutableList<ChatMessage>) {
-    // 1. Scrub technical "flavor" metadata
-    var cleanText = response
-        .lines()
-        .filterNot { it.trim().startsWith("[SYSTEM STATUS:") || it.trim().startsWith("[USER STATUS:") }
-        .joinToString("\n")
-        .trim()
-
-    val revealPattern = Regex("\\[REVEAL: (.*?)\\]")
-    val createPattern = Regex("\\[CREATE: (.*?), (.*?)\\]")
-    val updatePattern = Regex("\\[UPDATE: (.*?), (.*?), (.*?)\\]")
-    val deletePattern = Regex("\\[DELETE: (.*?), (.*?)\\]")
-    val togglePattern = Regex("\\[TOGGLE: (.*?), (.*?)\\]")
-
-    val revealMatch = revealPattern.find(cleanText)
-    val createMatch = createPattern.find(cleanText)
-    val updateMatch = updatePattern.find(cleanText)
-    val deleteMatch = deletePattern.find(cleanText)
-    val toggleMatch = togglePattern.find(cleanText)
+    val widgetPattern = Regex("""WIDGET::(\w+)::(\w+)::(\{.*\})""", RegexOption.DOT_MATCHES_ALL)
+    val match = widgetPattern.find(response)
     
-    // 2. Extract action and hide the tag from the user completely
+    var cleanText = response
     var proposedAction: ProposedAction? = null
     var secureItem: VaultItem? = null
 
-    when {
-        revealMatch != null -> {
-            val siteName = revealMatch.groupValues[1].trim()
-            cleanText = cleanText.replace(revealMatch.value, "").trim()
-            secureItem = VaultRepository.vaultItems.find { 
-                it.title.contains(siteName, ignoreCase = true) || siteName.contains(it.title, ignoreCase = true)
+    if (match != null) {
+        cleanText = response.replace(match.value, "").trim()
+        val module = match.groupValues[1]
+        val action = match.groupValues[2]
+        val jsonStr = match.groupValues[3]
+        
+        try {
+            val json = Json { ignoreUnknownKeys = true }.parseToJsonElement(jsonStr) as? JsonObject
+            
+            fun getJsonString(key: String): String? {
+                return json?.get(key)?.jsonPrimitive?.contentOrNull
             }
-        }
-        createMatch != null -> {
-            val module = createMatch.groupValues[1].trim()
-            val title = createMatch.groupValues[2].trim()
-            cleanText = cleanText.replace(createMatch.value, "").trim()
-            proposedAction = ProposedAction(
-                type = if (module == "Reminders") ActionType.CREATE_REMINDER else ActionType.CREATE,
-                module = module,
-                title = title
-            )
-        }
-        updateMatch != null -> {
-            val module = updateMatch.groupValues[1].trim()
-            val id = updateMatch.groupValues[2].trim()
-            val newTitle = updateMatch.groupValues[3].trim()
-            cleanText = cleanText.replace(updateMatch.value, "").trim()
-            proposedAction = ProposedAction(type = ActionType.UPDATE, module = module, targetId = id, title = newTitle)
-        }
-        // ... Handle others similarly if needed
-        deleteMatch != null -> {
-            val module = deleteMatch.groupValues[1].trim()
-            val id = deleteMatch.groupValues[2].trim()
-            cleanText = cleanText.replace(deleteMatch.value, "").trim()
-            proposedAction = ProposedAction(type = ActionType.DELETE, module = module, targetId = id)
-        }
-        toggleMatch != null -> {
-            val module = toggleMatch.groupValues[1].trim()
-            val id = toggleMatch.groupValues[2].trim()
-            cleanText = cleanText.replace(toggleMatch.value, "").trim()
-            proposedAction = ProposedAction(type = ActionType.TOGGLE, module = module, targetId = id)
+
+            if (module == "VAULT" && action == "REVEAL") {
+                val title = getJsonString("title")
+                secureItem = VaultRepository.vaultItems.find { it.title.equals(title, ignoreCase = true) }
+            } else {
+                proposedAction = ProposedAction(
+                    type = when(action) {
+                        "CREATE" -> if (module == "REMINDER") ActionType.CREATE_REMINDER else ActionType.CREATE
+                        "DELETE" -> ActionType.DELETE
+                        "TOGGLE" -> ActionType.TOGGLE
+                        "UPDATE" -> ActionType.UPDATE
+                        else -> ActionType.NONE
+                    },
+                    module = when(module) {
+                        "TASK" -> "Tasks"
+                        "REMINDER" -> "Reminders"
+                        "ALARM" -> "Alarms"
+                        else -> module
+                    },
+                    title = getJsonString("title") ?: getJsonString("label"),
+                    time = getJsonString("time"),
+                    category = getJsonString("category"),
+                    targetId = getJsonString("id"),
+                    priority = getJsonString("priority"),
+                    repeatDays = json?.get("days")?.let { arr ->
+                        (arr as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull }
+                    }
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
-
-    cleanText = cleanText
-        .lines()
-        .filterNot { it.contains("AVAILABLE INTERFACE TAGS") || it.contains("[REQUEST:") || it.contains("[COMMAND]") || it.contains("INTERFACE TAG SELECTION") }
-        .joinToString("\n")
-        .trim()
 
     messages.add(ChatMessage(
         text = cleanText,

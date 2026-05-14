@@ -9,10 +9,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -25,17 +27,18 @@ import com.productivityapp.app.ui.vault.VaultType
 @Composable
 fun UniversalActionCard(
     modifier: Modifier = Modifier,
+    accentColor: Color = Color(0xFF818CF8),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
         modifier = modifier.widthIn(max = 320.dp),
-        color = Color.White.copy(alpha = 0.03f),
+        color = Color(0xFF0F172A).copy(alpha = 0.95f),
         shape = RoundedCornerShape(24.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.2f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             content()
         }
@@ -157,21 +160,23 @@ fun CategorySection(selected: String, options: List<String>, onSelect: (String) 
 // 6. RepeatWidget
 @Composable
 fun RepeatSection(selectedDays: Set<String>, onToggle: (String) -> Unit) {
-    val allDays = listOf("M", "T", "W", "T", "F", "S", "S")
+    val daysMap = listOf(
+        "M" to "Mo", "T" to "Tu", "W" to "We", "T" to "Th", "F" to "Fr", "S" to "Sa", "S" to "Su"
+    )
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("REPEAT ON", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+        Text("REPEAT ON", color = Color.Gray.copy(alpha = 0.5f), fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            allDays.forEach { day ->
-                val isSelected = selectedDays.contains(day)
+            daysMap.forEach { (display, id) ->
+                val isSelected = selectedDays.contains(id)
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
-                        .background(if (isSelected) Color(0xFF818CF8) else Color.White.copy(alpha = 0.03f))
-                        .clickable { onToggle(day) },
+                        .background(if (isSelected) Color(0xFF818CF8) else Color.White.copy(alpha = 0.05f))
+                        .clickable { onToggle(id) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(day, color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(display, color = if (isSelected) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -202,22 +207,91 @@ fun ToggleSection(label: String, checked: Boolean, onCheckedChange: (Boolean) ->
 @Composable
 fun StatusSection(status: String, onStatusChange: (String) -> Unit) {
     val statuses = listOf("TODO", "PROGRESS", "DONE")
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("STATUS", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("STATUS", color = Color.Gray.copy(alpha = 0.5f), fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             statuses.forEach { s ->
                 val isSelected = status == s
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(30.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) Color(0xFF22C55E).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.03f))
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) Color(0xFF22C55E).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, if (isSelected) Color(0xFF22C55E).copy(alpha = 0.4f) else Color.Transparent, RoundedCornerShape(12.dp))
                         .clickable { onStatusChange(s) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(s, color = if (isSelected) Color(0xFF22C55E) else Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(s, color = if (isSelected) Color(0xFF22C55E) else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+// 8b. ToggleStateSection (Switch style)
+@Composable
+fun ToggleStateSection(label: String, targetState: Boolean) {
+    UniversalToggleSection(
+        label = "TARGET STATUS",
+        subLabel = label,
+        icon = if (targetState) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+        isActive = targetState,
+        onToggle = {} // Proposal view is read-only until confirm
+    )
+}
+
+// 9. UniversalToggleSection (Modeled after SheetSwitchItem)
+@Composable
+fun UniversalToggleSection(
+    label: String, 
+    subLabel: String, 
+    icon: ImageVector, 
+    isActive: Boolean, 
+    activeColor: Color = Color(0xFFFF5722),
+    onToggle: (Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Text(
+            text = label.uppercase(),
+            color = Color.Gray.copy(alpha = 0.5f),
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth().height(42.dp),
+            color = Color.White.copy(alpha = 0.04f),
+            shape = RoundedCornerShape(10.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.03f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp), 
+                verticalAlignment = Alignment.CenterVertically, 
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        icon, 
+                        contentDescription = null, 
+                        tint = if (isActive) activeColor else Color.Gray, 
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(subLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Switch(
+                    checked = isActive, 
+                    onCheckedChange = onToggle, 
+                    modifier = Modifier.scale(0.7f), 
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White, 
+                        checkedTrackColor = activeColor,
+                        uncheckedThumbColor = Color.Gray,
+                        uncheckedTrackColor = Color.Gray.copy(alpha = 0.3f)
+                    )
+                )
             }
         }
     }
@@ -273,34 +347,33 @@ fun RevealSection(item: VaultItem, isRevealed: Boolean, onReveal: () -> Unit) {
 fun ActionSection(isProcessed: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Button(
+        TextButton(
             onClick = onDismiss,
             enabled = !isProcessed,
-            modifier = Modifier.weight(0.4f),
-            colors = ButtonDefaults.buttonColors(backgroundColor = Color.White.copy(alpha = 0.05f)),
-            shape = RoundedCornerShape(12.dp),
-            elevation = null
+            modifier = Modifier.weight(1f).height(48.dp),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            Text("Dismiss", color = Color.Gray, fontSize = 12.sp)
+            Text("Cancel", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
+        
         Button(
             onClick = onConfirm,
             enabled = !isProcessed,
-            modifier = Modifier.weight(0.6f),
+            modifier = Modifier.weight(1.5f).height(48.dp),
             colors = ButtonDefaults.buttonColors(
                 backgroundColor = Color(0xFF818CF8),
                 disabledBackgroundColor = Color(0xFF818CF8).copy(alpha = 0.3f)
             ),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(16.dp),
+            elevation = ButtonDefaults.elevation(defaultElevation = 0.dp, pressedElevation = 4.dp)
         ) {
-            Text(
-                if (isProcessed) "Processed" else "Confirm", 
-                color = if (isProcessed) Color.White.copy(alpha = 0.5f) else Color.White, 
-                fontSize = 12.sp, 
-                fontWeight = FontWeight.Bold
-            )
+            if (isProcessed) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            } else {
+                Text("Confirm", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
 }

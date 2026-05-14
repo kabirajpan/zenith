@@ -40,9 +40,9 @@ fun AlarmScreen() {
     var showAddModal by remember { mutableStateOf(false) }
     var alarmToEdit by remember { mutableStateOf<Alarm?>(null) }
     
-    val alarms = remember { mutableStateListOf<Alarm>() }
+    val alarms = AlarmRepository.alarms
 
-    val filteredAlarms by remember(searchQuery, selectedCategory) {
+    val filteredAlarms by remember(searchQuery, selectedCategory, alarms.size) {
         derivedStateOf {
             alarms.filter { alarm ->
                 val matchesSearch = alarm.label.contains(searchQuery, ignoreCase = true) || 
@@ -159,12 +159,7 @@ fun AlarmScreen() {
             items(filteredAlarms) { alarm ->
                 AlarmCard(
                     alarm = alarm,
-                    onToggle = { 
-                        val index = alarms.indexOfFirst { it.id == alarm.id }
-                        if (index != -1) {
-                            alarms[index] = alarms[index].copy(isEnabled = !alarms[index].isEnabled)
-                        }
-                    },
+                    onToggle = { AlarmRepository.toggleAlarm(alarm.id) },
                     onClick = {
                         alarmToEdit = alarm
                         showAddModal = true
@@ -183,32 +178,24 @@ fun AlarmScreen() {
             },
             onSave = { time, label, days, isVibrate, escalationType, sound ->
                 if (alarmToEdit != null) {
-                    val index = alarms.indexOfFirst { it.id == alarmToEdit!!.id }
-                    if (index != -1) {
-                        alarms[index] = alarmToEdit!!.copy(
-                            time = time, 
-                            label = label, 
-                            repeatDays = days.mapNotNull { Alarm.stringToDayOfWeek(it) },
-                            isVibrate = isVibrate,
-                            escalationType = escalationType,
-                            sound = sound,
-                            updatedAt = java.time.Instant.now().toEpochMilli()
-                        )
-                    }
-                } else {
-                    val now = java.time.Instant.now().toEpochMilli()
-                    alarms.add(Alarm(
-                        id = java.util.UUID.randomUUID().toString(),
-                        time = time, 
-                        label = label, 
-                        repeatDays = days.mapNotNull { Alarm.stringToDayOfWeek(it) },
-                        isEnabled = true,
+                    AlarmRepository.updateAlarm(
+                        id = alarmToEdit!!.id,
+                        time = time,
+                        label = label,
+                        repeatDays = days,
                         isVibrate = isVibrate,
                         escalationType = escalationType,
-                        sound = sound,
-                        createdAt = now,
-                        updatedAt = now
-                    ))
+                        sound = sound
+                    )
+                } else {
+                    AlarmRepository.addAlarm(
+                        time = time,
+                        label = label,
+                        repeatDays = days,
+                        isVibrate = isVibrate,
+                        escalationType = escalationType,
+                        sound = sound
+                    )
                 }
                 showAddModal = false
                 alarmToEdit = null
