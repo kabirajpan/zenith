@@ -24,6 +24,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import com.productivityapp.app.ui.notes.components.ToolButton
+import com.productivityapp.model.Task
+import com.productivityapp.model.TaskPriority
+import com.productivityapp.model.TaskStatus
+import com.productivityapp.model.TaskCategory
+import com.productivityapp.app.ui.ai.ProposedAction
+import com.productivityapp.app.ui.ai.ActionType
 
 @Composable
 fun TaskListScreen() {
@@ -33,14 +39,14 @@ fun TaskListScreen() {
     
     val tasks = TasksRepository.tasks
     var showAddTaskModal by remember { mutableStateOf(false) }
-    var selectedTaskForDetail by remember { mutableStateOf<TaskItem?>(null) }
-    var taskToEdit by remember { mutableStateOf<TaskItem?>(null) }
+    var selectedTaskForDetail by remember { mutableStateOf<Task?>(null) }
+    var taskToEdit by remember { mutableStateOf<Task?>(null) }
 
     val filteredTasks by remember(searchQuery, selectedCategory) {
         derivedStateOf {
             tasks.filter { task ->
                 val matchesSearch = task.title.contains(searchQuery, ignoreCase = true)
-                val matchesCategory = selectedCategory == "All" || task.category == selectedCategory
+                val matchesCategory = selectedCategory == "All" || task.category.name.equals(selectedCategory, ignoreCase = true)
                 matchesSearch && matchesCategory
             }
         }
@@ -156,8 +162,8 @@ fun TaskListScreen() {
         AddTaskModal(
             initialCategory = if (selectedCategory == "All") "Work" else selectedCategory,
             onDismiss = { showAddTaskModal = false },
-            onTaskCreated = { title, cat, prio, desc, est, energy ->
-                TasksRepository.addTask(title, cat, prio, desc, est, energy)
+            onTaskCreated = { title, cat, prio, desc, dueDate, dueTime, hasReminder, hasAlarm ->
+                TasksRepository.addTask(title, cat, prio, desc, dueDate, dueTime, hasReminder, hasAlarm)
                 showAddTaskModal = false
             }
         )
@@ -175,11 +181,11 @@ fun TaskListScreen() {
 
     taskToEdit?.let { task ->
         AddTaskModal(
-            initialCategory = task.category,
+            initialCategory = task.category.name,
             taskToEdit = task,
             onDismiss = { taskToEdit = null },
-            onTaskCreated = { title, cat, prio, desc, est, energy ->
-                TasksRepository.updateTask(task.id, title, cat, prio, desc, est, energy)
+            onTaskCreated = { title, cat, prio, desc, dueDate, dueTime, hasReminder, hasAlarm ->
+                TasksRepository.updateTask(task.id, title, cat, prio, desc, dueDate, dueTime, task.status, hasReminder, hasAlarm)
                 taskToEdit = null
             }
         )
@@ -203,82 +209,3 @@ fun CategoryChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
     }
 }
 
-@Composable
-fun TaskCard(task: TaskItem, onToggle: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
-    Surface(
-        color = Color.White.copy(alpha = 0.04f),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Custom Radio/Checkbox
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(if (task.isCompleted) Color(0xFF818CF8) else Color.Transparent)
-                    .clickable { onToggle() }
-                    .border(
-                        width = 2.dp,
-                        color = if (task.isCompleted) Color(0xFF818CF8) else Color.Gray.copy(alpha = 0.5f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (task.isCompleted) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-            }
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = task.title,
-                    color = if (task.isCompleted) Color.Gray else Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    style = if (task.isCompleted) TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else TextStyle.Default
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = task.time, color = Color.Gray, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.size(4.dp).background(Color.Gray.copy(alpha = 0.3f), CircleShape))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = task.category, color = Color(0xFF818CF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-            
-            // Priority Badge
-            Surface(
-                color = when(task.priority) {
-                    "High" -> Color(0xFFF87171).copy(alpha = 0.1f)
-                    "Medium" -> Color(0xFFFBBF24).copy(alpha = 0.1f)
-                    else -> Color(0xFF34D399).copy(alpha = 0.1f)
-                },
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = task.priority,
-                    color = when(task.priority) {
-                        "High" -> Color(0xFFF87171)
-                        "Medium" -> Color(0xFFFBBF24)
-                        else -> Color(0xFF34D399)
-                    },
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}

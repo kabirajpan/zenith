@@ -25,16 +25,12 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import com.productivityapp.app.ui.tasks.SheetSwitchItem
 
-data class AlarmItem(
-    val id: Int,
-    val time: String,
-    val label: String,
-    val days: List<String>,
-    val isEnabled: Boolean,
-    val escalationType: String = "Standard", // Gentle, Standard, Urgent
-    val isHighPriority: Boolean = false
-)
+import com.productivityapp.model.Alarm
+import com.productivityapp.model.DayOfWeek
 
 @Composable
 fun AlarmScreen() {
@@ -42,9 +38,9 @@ fun AlarmScreen() {
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = listOf("All", "Active", "Recurring")
     var showAddModal by remember { mutableStateOf(false) }
-    var alarmToEdit by remember { mutableStateOf<AlarmItem?>(null) }
+    var alarmToEdit by remember { mutableStateOf<Alarm?>(null) }
     
-    val alarms = remember { mutableStateListOf<AlarmItem>() }
+    val alarms = remember { mutableStateListOf<Alarm>() }
 
     val filteredAlarms by remember(searchQuery, selectedCategory) {
         derivedStateOf {
@@ -53,7 +49,7 @@ fun AlarmScreen() {
                                    alarm.time.contains(searchQuery, ignoreCase = true)
                 val matchesCategory = when(selectedCategory) {
                     "Active" -> alarm.isEnabled
-                    "Recurring" -> alarm.days.size > 1
+                    "Recurring" -> alarm.repeatDays.size > 1
                     else -> true
                 }
                 matchesSearch && matchesCategory
@@ -185,14 +181,34 @@ fun AlarmScreen() {
                 showAddModal = false
                 alarmToEdit = null
             },
-            onSave = { time, label, days ->
+            onSave = { time, label, days, isVibrate, escalationType, sound ->
                 if (alarmToEdit != null) {
                     val index = alarms.indexOfFirst { it.id == alarmToEdit!!.id }
                     if (index != -1) {
-                        alarms[index] = alarmToEdit!!.copy(time = time, label = label, days = days)
+                        alarms[index] = alarmToEdit!!.copy(
+                            time = time, 
+                            label = label, 
+                            repeatDays = days.mapNotNull { Alarm.stringToDayOfWeek(it) },
+                            isVibrate = isVibrate,
+                            escalationType = escalationType,
+                            sound = sound,
+                            updatedAt = java.time.Instant.now().toEpochMilli()
+                        )
                     }
                 } else {
-                    alarms.add(AlarmItem(alarms.size + 1, time, label, days, true))
+                    val now = java.time.Instant.now().toEpochMilli()
+                    alarms.add(Alarm(
+                        id = java.util.UUID.randomUUID().toString(),
+                        time = time, 
+                        label = label, 
+                        repeatDays = days.mapNotNull { Alarm.stringToDayOfWeek(it) },
+                        isEnabled = true,
+                        isVibrate = isVibrate,
+                        escalationType = escalationType,
+                        sound = sound,
+                        createdAt = now,
+                        updatedAt = now
+                    ))
                 }
                 showAddModal = false
                 alarmToEdit = null
@@ -203,9 +219,9 @@ fun AlarmScreen() {
 
 @Composable
 fun AlarmEntryModal(
-    initialAlarm: AlarmItem? = null,
+    initialAlarm: Alarm? = null,
     onDismiss: () -> Unit, 
-    onSave: (String, String, List<String>) -> Unit
+    onSave: (String, String, List<String>, Boolean, String, String) -> Unit
 ) {
     // Parse initial time if editing
     val initialHour = initialAlarm?.time?.split(":")?.get(0)?.toIntOrNull() ?: 7
@@ -216,7 +232,10 @@ fun AlarmEntryModal(
     var selectedMinute by remember { mutableStateOf(initialMinute) }
     var selectedAmPm by remember { mutableStateOf(initialAmPm) }
     var label by remember { mutableStateOf(initialAlarm?.label ?: "") }
-    var selectedDays by remember { mutableStateOf(initialAlarm?.days?.toSet() ?: setOf<String>()) }
+    var selectedDays by remember { mutableStateOf(initialAlarm?.getDaysAsStringList()?.toSet() ?: setOf<String>()) }
+    var isVibrate by remember { mutableStateOf(initialAlarm?.isVibrate ?: true) }
+    var escalationType by remember { mutableStateOf(initialAlarm?.escalationType ?: "Standard") }
+    var sound by remember { mutableStateOf(initialAlarm?.sound ?: "Default") }
     val allDays = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
 
     androidx.compose.ui.window.Dialog(
@@ -224,14 +243,14 @@ fun AlarmEntryModal(
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.80f),
+            modifier = Modifier.fillMaxWidth(0.92f),
             color = Color(0xFF0F172A),
             shape = RoundedCornerShape(24.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -245,86 +264,144 @@ fun AlarmEntryModal(
                     )
                 }
 
-                // Apple-inspired Wheel Picker
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
-                    contentAlignment = Alignment.Center
+                // Alarm Time Unified Cylinder (Compact)
+                Surface(
+                    modifier = Modifier.fillMaxWidth().height(128.dp),
+                    color = Color.White.copy(alpha = 0.03f),
+                    shape = RoundedCornerShape(20.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
                 ) {
-                    // Selection Highlight
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(0.9f).height(40.dp),
-                        color = Color.White.copy(alpha = 0.03f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {}
+                    Box(contentAlignment = Alignment.Center) {
+                        // Selection Highlight
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.95f).height(36.dp),
+                            color = Color.White.copy(alpha = 0.04f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {}
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        WheelPicker(
-                            items = (1..12).toList(),
-                            initialValue = 7,
-                            onValueChange = { selectedHour = it }
-                        )
-                        Text(":", color = Color.White.copy(alpha = 0.5f), fontSize = 20.sp, modifier = Modifier.padding(horizontal = 8.dp))
-                        WheelPicker(
-                            items = (0..59).toList(),
-                            initialValue = 0,
-                            format = { it.toString().padStart(2, '0') },
-                            onValueChange = { selectedMinute = it }
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        WheelPicker(
-                            items = listOf("AM", "PM"),
-                            initialValue = "AM",
-                            onValueChange = { selectedAmPm = it }
-                        )
-                    }
-                }
-
-                // Label Input
-                AlarmInputField(
-                    label = "Alarm Label",
-                    value = label,
-                    onValueChange = { label = it },
-                    placeholder = "e.g. Morning Routine"
-                )
-
-                // Day Selection
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Repeat", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        allDays.forEach { day ->
-                            val isSelected = selectedDays.contains(day)
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.05f))
-                                    .clickable { 
-                                        selectedDays = if (isSelected) selectedDays - day else selectedDays + day
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = day,
-                                    color = if (isSelected) Color(0xFF0F172A) else Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(modifier = Modifier.width(60.dp), contentAlignment = Alignment.Center) {
+                                WheelPicker(
+                                    items = (1..12).toList(),
+                                    initialValue = selectedHour,
+                                    onValueChange = { selectedHour = it }
+                                )
+                            }
+                            Text(":", color = Color.White.copy(alpha = 0.5f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Box(modifier = Modifier.width(60.dp), contentAlignment = Alignment.Center) {
+                                WheelPicker(
+                                    items = (0..59).toList(),
+                                    initialValue = selectedMinute,
+                                    format = { it.toString().padStart(2, '0') },
+                                    onValueChange = { selectedMinute = it }
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(modifier = Modifier.width(60.dp), contentAlignment = Alignment.Center) {
+                                WheelPicker(
+                                    items = listOf("AM", "PM"),
+                                    initialValue = selectedAmPm,
+                                    onValueChange = { selectedAmPm = it }
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // Label & Sound Inputs (Stacked vertically for full width)
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AlarmInputField(
+                        label = "Alarm Label",
+                        value = label,
+                        onValueChange = { label = it },
+                        placeholder = "e.g. Morning Routine"
+                    )
+                }
+
+                // Sound & Vibrate Row (Minimalistic)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        AlarmInputField(
+                            label = "Sound",
+                            value = sound,
+                            onValueChange = { sound = it },
+                            placeholder = "Default"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        SheetSwitchItem(
+                            label = "Vibration",
+                            subLabel = "Vibrate",
+                            icon = Icons.Default.Vibration,
+                            isActive = isVibrate,
+                            onToggle = { isVibrate = it }
+                        )
+                    }
+                }
+
+                // Fused Repeat Days Section
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    Text("REPEAT DAYS", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color.White.copy(alpha = 0.03f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            allDays.forEach { day ->
+                                val isSelected = selectedDays.contains(day)
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.05f))
+                                        .clickable { 
+                                            selectedDays = if (isSelected) selectedDays - day else selectedDays + day
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = day,
+                                        color = if (isSelected) Color(0xFF0F172A) else Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fused Escalation Row
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    Text("ESCALATION", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("Gentle", "Standard", "Urgent").forEach { type ->
+                            val isSelected = escalationType == type
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(32.dp)
+                                    .clickable { escalationType = type },
+                                color = if (isSelected) Color(0xFFFBBF24).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.5f)) else null
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(type, color = if (isSelected) Color(0xFFFBBF24) else Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Standardized Button Row (Match Vault)
                 Row(
@@ -345,7 +422,7 @@ fun AlarmEntryModal(
                     Button(
                         onClick = { 
                             val formattedTime = "${selectedHour}:${selectedMinute.toString().padStart(2, '0')} $selectedAmPm"
-                            onSave(formattedTime, label, selectedDays.toList()) 
+                            onSave(formattedTime, label, selectedDays.toList(), isVibrate, escalationType, sound) 
                         },
                         modifier = Modifier.weight(0.6f),
                         colors = ButtonDefaults.buttonColors(
@@ -369,15 +446,16 @@ fun AlarmEntryModal(
 
 @Composable
 fun AlarmInputField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String = "") {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Text(label, color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(4.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.04f),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(8.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.03f))
         ) {
-            Box(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+            Box(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
                 if (value.isEmpty()) {
                     Text(placeholder, color = Color.Gray.copy(alpha = 0.4f), fontSize = 13.sp)
                 }
@@ -393,39 +471,60 @@ fun AlarmInputField(label: String, value: String, onValueChange: (String) -> Uni
     }
 }
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun <T> WheelPicker(
     items: List<T>,
     initialValue: T,
+    modifier: Modifier = Modifier,
     format: (T) -> String = { it.toString() },
     onValueChange: (T) -> Unit
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val itemHeight = 40.dp
+    val itemHeight = 44.dp // Slightly taller for more presence
     val visibleItems = 3
     val listState = androidx.compose.foundation.lazy.rememberLazyListState(
         initialFirstVisibleItemIndex = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2 % items.size) + items.indexOf(initialValue) - 1
     )
 
+    // Pixel-perfect center tracking
     val centerIndex by remember {
         derivedStateOf {
-            listState.firstVisibleItemIndex + 1
+            val layoutInfo = listState.layoutInfo
+            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+            if (visibleItemsInfo.isEmpty()) -1
+            else {
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                visibleItemsInfo.minByOrNull { Math.abs((it.offset + it.size / 2) - viewportCenter) }?.index ?: -1
+            }
         }
     }
 
     LaunchedEffect(centerIndex) {
-        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-        onValueChange(items[centerIndex % items.size])
-    }
-
-    // Snapping Logic
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            listState.animateScrollToItem(centerIndex - 1)
+        if (centerIndex != -1) {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            onValueChange(items[centerIndex % items.size])
         }
     }
 
-    Box(modifier = Modifier.height(itemHeight * visibleItems).width(50.dp)) {
+    // Gentle Manual Snapping (Less 'High' magnet feel)
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            val layoutInfo = listState.layoutInfo
+            val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+            val targetItem = layoutInfo.visibleItemsInfo.minByOrNull { 
+                Math.abs((it.offset + it.size / 2f) - viewportCenter) 
+            }
+            
+            targetItem?.let {
+                // Smoothly slide to center without the aggressive 'snap' jump
+                listState.animateScrollToItem(it.index - 1)
+            }
+        }
+    }
+
+    Box(modifier = modifier.height(itemHeight * visibleItems).width(60.dp)) {
         androidx.compose.foundation.lazy.LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -435,22 +534,40 @@ fun <T> WheelPicker(
                 val item = items[i % items.size]
                 val isSelected = i == centerIndex
                 
+                // Smooth highlight color transition
+                val animatedColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 250)
+                )
+
                 Box(
                     modifier = Modifier
                         .height(itemHeight)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            val layoutInfo = listState.layoutInfo
+                            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == i }
+                            if (itemInfo != null) {
+                                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                                val itemCenter = itemInfo.offset + itemInfo.size / 2f
+                                val distanceFromCenter = Math.abs(viewportCenter - itemCenter)
+                                
+                                val normalizedDistance = (distanceFromCenter / (itemHeight.toPx() * 2f)).coerceIn(0f, 1f)
+                                
+                                alpha = 1f - (normalizedDistance * 0.5f)
+                                val s = 1.12f - (normalizedDistance * 0.22f)
+                                scaleX = s
+                                scaleY = s
+                                rotationX = (viewportCenter - itemCenter) / 10f
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = format(item),
-                        color = if (isSelected) Color.White else Color.Gray.copy(alpha = 0.3f),
-                        fontSize = if (isSelected) 22.sp else 18.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.graphicsLayer(
-                            alpha = if (isSelected) 1f else 0.5f,
-                            scaleX = if (isSelected) 1.1f else 0.9f,
-                            scaleY = if (isSelected) 1.1f else 0.9f
-                        )
+                        color = animatedColor,
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                     )
                 }
             }
@@ -459,7 +576,7 @@ fun <T> WheelPicker(
 }
 
 @Composable
-fun AlarmCard(alarm: AlarmItem, onToggle: () -> Unit, onClick: () -> Unit) {
+fun AlarmCard(alarm: Alarm, onToggle: () -> Unit, onClick: () -> Unit) {
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
     
     // Update time every minute
@@ -533,8 +650,9 @@ fun AlarmCard(alarm: AlarmItem, onToggle: () -> Unit, onClick: () -> Unit) {
                 // Day Indicators
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val allDays = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+                    val activeDays = alarm.getDaysAsStringList()
                     allDays.forEach { day ->
-                        val isDayActive = alarm.days.contains(day)
+                        val isDayActive = activeDays.contains(day)
                         Box(
                             modifier = Modifier
                                 .size(20.dp) // Increased slightly for better centering

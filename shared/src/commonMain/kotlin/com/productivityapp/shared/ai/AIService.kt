@@ -48,16 +48,21 @@ object AIService {
     private const val MODEL = "llama-3.1-8b-instant"
 
     suspend fun getCompletion(prompt: String, systemPrompt: String): String? {
+        val messages = listOf(
+            GroqMessage(role = "system", content = systemPrompt),
+            GroqMessage(role = "user", content = prompt)
+        )
+        return getCompletionWithMessages(messages)
+    }
+
+    suspend fun getCompletionWithMessages(messages: List<GroqMessage>): String? {
         return try {
             val response: GroqResponse = client.post(API_URL) {
                 header(HttpHeaders.Authorization, "Bearer $API_KEY")
                 contentType(ContentType.Application.Json)
                 setBody(GroqRequest(
                     model = MODEL,
-                    messages = listOf(
-                        GroqMessage(role = "system", content = systemPrompt),
-                        GroqMessage(role = "user", content = prompt)
-                    )
+                    messages = messages
                 ))
             }.body()
 

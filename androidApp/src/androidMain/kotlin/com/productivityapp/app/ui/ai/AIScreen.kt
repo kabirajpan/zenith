@@ -35,6 +35,12 @@ import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.vault.VaultRepository
 import com.productivityapp.app.ui.reminders.RemindersRepository
 import com.productivityapp.app.ui.notes.NotesRepository
+import com.productivityapp.app.ui.common.*
+import com.productivityapp.app.ui.tasks.components.TaskActionWidget
+import com.productivityapp.app.ui.reminders.components.ReminderActionWidget
+import com.productivityapp.app.ui.vault.components.VaultSecureRevealWidget
+import com.productivityapp.app.ui.notes.components.NoteActionWidget
+import com.productivityapp.app.ui.alarm.components.AlarmActionWidget
 import kotlinx.coroutines.launch
 
 // ChatMessage moved to AIRepository.kt
@@ -160,14 +166,42 @@ fun AIScreen() {
                             isTyping = true
                             
                             scope.launch {
-                                val systemPrompt = buildSystemPrompt()
-                                val response = AIService.getCompletion(query, systemPrompt)
+                                // Phase 1: Intent & Tool Call
+                                val agentPrompt = buildAgentPrompt()
+                                val intentResponse = AIService.getCompletion(query, agentPrompt)
+                                
+                                if (intentResponse == null) {
+                                    isTyping = false
+                                    messages.add(ChatMessage(text = "I encountered an error. Please check your connection.", isUser = false))
+                                    return@launch
+                                }
+
+                                // Phase 2: Execution (Search)
+                                val toolCallPattern = Regex("\\[TOOL_CALL: (.*?), \"(.*?)\"\\]")
+                                val toolMatch = toolCallPattern.find(intentResponse)
+                                
+                                val retrievedContext = if (toolMatch != null) {
+                                    val toolType = toolMatch.groupValues[1].trim()
+                                    val toolQuery = toolMatch.groupValues[2].trim()
+                                    
+                                    executeTool(toolType, toolQuery)
+                                } else {
+                                    "No specific tool called. Use general knowledge."
+                                }
+
+                                // Phase 3: Synthesis (Final Response)
+                                val synthesisPrompt = buildSynthesisPrompt(retrievedContext)
+                                val finalResponse = AIService.getCompletionWithMessages(listOf(
+                                    com.productivityapp.shared.ai.GroqMessage(role = "system", content = synthesisPrompt),
+                                    com.productivityapp.shared.ai.GroqMessage(role = "user", content = query)
+                                ))
+                                
                                 isTyping = false
                                 
-                                if (response != null) {
-                                    processResponse(response, messages)
+                                if (finalResponse != null) {
+                                    processResponse(finalResponse, messages)
                                 } else {
-                                    messages.add(ChatMessage(text = "I encountered an error. Please check your connection.", isUser = false))
+                                    messages.add(ChatMessage(text = "I couldn't synthesize a response. Please try again.", isUser = false))
                                 }
                             }
                         }
@@ -184,6 +218,34 @@ fun AIScreen() {
                 }
             }
         }
+    }
+}
+
+fun executeTool(type: String, query: String): String {
+    return when (type) {
+        "SEARCH_NOTES" -> {
+            val results = NotesRepository.searchNotes(query)
+            if (results.isEmpty()) "No notes found for '$query'."
+            else "FOUND NOTES:\n" + results.joinToString("\n") { "- ${it.title}: ${it.summary}" }
+        }
+        "SEARCH_TASKS" -> {
+            val results = TasksRepository.searchTasks(query)
+            if (results.isEmpty()) "No tasks found for '$query'."
+            else "FOUND TASKS:\n" + results.joinToString("\n") { "- ${it.title} [Status: ${it.status}, Priority: ${it.priority}, ID: ${it.id}]" }
+        }
+        "SEARCH_REMINDERS" -> {
+            val results = RemindersRepository.searchReminders(query)
+            if (results.isEmpty()) "No reminders found for '$query'."
+            else "FOUND REMINDERS:\n" + results.joinToString("\n") { "- ${it.title} at ${it.time} on ${it.date}" }
+        }
+        "SEARCH_VAULT" -> {
+            val results = VaultRepository.searchVault(query)
+            if (results.isEmpty()) "No matching records found in Secure Vault for '$query'."
+            else "FOUND SECURE METADATA (Passwords are HIDDEN and REDACTED from your context for security):\n" + results.joinToString("\n") { 
+                "- SITE: ${it.site}, USER: ${it.username}, DESC: ${it.description} (Category: ${it.category})" 
+            }
+        }
+        else -> "Unknown tool called."
     }
 }
 
@@ -210,308 +272,101 @@ fun ZenithChatBubble(message: ChatMessage) {
                 MarkdownText(message.text)
                 
                 // Zero-Knowledge Handshake Block (Secure Widget)
-                if (message.secureItem != null) {
+                if (message.secureItem != null && !message.isProcessed) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.2f)),
-                        modifier = Modifier.widthIn(max = 280.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .background(Color(0xFF22C55E).copy(alpha = 0.1f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        if (isRevealed) Icons.Default.LockOpen else Icons.Default.Lock, 
-                                        contentDescription = null, 
-                                        tint = Color(0xFF22C55E), 
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(message.secureItem.site, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    Text(message.secureItem.username, color = Color.Gray, fontSize = 11.sp)
-                                }
-                            }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            if (!isRevealed) {
-                                Button(
-                                    onClick = { isRevealed = true },
-                                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF22C55E).copy(alpha = 0.15f)),
-                                    shape = RoundedCornerShape(10.dp),
-                                    elevation = null,
-                                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text("Tap to Reveal", color = Color(0xFF22C55E), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
-                                        .clickable { 
-                                            clipboardManager.setText(AnnotatedString(message.secureItem.password))
-                                        }
-                                        .padding(vertical = 10.dp, horizontal = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = message.secureItem.password,
-                                            color = Color.White,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 2.sp,
-                                            modifier = Modifier.weight(1f),
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                        )
-                                        Icon(
-                                            Icons.Default.ContentCopy, 
-                                            contentDescription = "Copy", 
-                                            tint = Color(0xFF22C55E).copy(alpha = 0.6f),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    VaultSecureRevealWidget(
+                        message = message,
+                        onProcessed = { message.isProcessed = true }
+                    )
                 }
                 
-                // Proposed Task Action Block
-                if (message.proposedAction != null && !isActionProcessed) {
+                // Proposed Action Block (Tokenized)
+                if (message.proposedAction != null && !message.isProcessed) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    ProposedTaskWidget(
-                        action = message.proposedAction,
-                        onConfirm = { updatedAction ->
-                            when (updatedAction.type) {
-                                ActionType.CREATE -> {
-                                    TasksRepository.addTask(
-                                        title = updatedAction.title ?: "New Task",
-                                        category = updatedAction.category ?: "Work",
-                                        priority = updatedAction.priority ?: "Medium",
-                                        energyLevel = updatedAction.energyLevel ?: "Medium"
-                                    )
-                                }
-                                ActionType.CREATE_REMINDER -> {
-                                    RemindersRepository.addReminder(
-                                        title = updatedAction.title ?: "New Reminder",
-                                        date = "Today",
-                                        time = "Soon",
-                                        category = updatedAction.category ?: "Personal",
-                                        priority = updatedAction.priority ?: "Medium"
-                                    )
-                                }
-                                ActionType.TOGGLE -> {
-                                    updatedAction.taskId?.let { TasksRepository.toggleTask(it) }
-                                }
-                                ActionType.DELETE -> {
-                                    updatedAction.taskId?.let { TasksRepository.deleteTask(it) }
-                                }
-                                ActionType.ADD_NOTE_BLOCK -> {
-                                    if (updatedAction.blockType == "table") {
-                                        val rows = updatedAction.blockContent?.split("||")?.map { it.split("|").map { it.trim() } } ?: emptyList()
-                                        NotesRepository.saveOrUpdateNote(
-                                            id = null,
-                                            title = updatedAction.title ?: "AI Suggested Note",
-                                            summary = "Table generated by AI",
-                                            blocks = listOf(com.productivityapp.model.NoteBlock.Table(rows))
-                                        )
-                                    }
-                                }
-                            }
-                            
-                            scope.launch {
-                                kotlinx.coroutines.delay(1500)
-                                isActionProcessed = true
-                                // Add a simple AI acknowledgement
-                                val completionText = when(updatedAction.type) {
-                                    ActionType.CREATE -> "Task '${updatedAction.title}' created successfully!"
-                                    ActionType.CREATE_REMINDER -> "Reminder '${updatedAction.title}' set successfully!"
-                                    ActionType.TOGGLE -> "Task updated!"
-                                    ActionType.DELETE -> "Task deleted!"
-                                    ActionType.ADD_NOTE_BLOCK -> "Note with ${updatedAction.blockType} created!"
-                                }
-                                AIRepository.currentSession.value.messages.add(
-                                    ChatMessage(text = completionText, isUser = false)
+                    
+                    val onConfirm: (ProposedAction) -> Unit = { updatedAction ->
+                        message.isProcessed = true
+                        when (updatedAction.type) {
+                            ActionType.CREATE -> {
+                                val cat = com.productivityapp.model.TaskCategory.entries.find { it.name.equals(updatedAction.category, ignoreCase = true) } ?: com.productivityapp.model.TaskCategory.WORK
+                                val prio = com.productivityapp.model.TaskPriority.entries.find { it.name.equals(updatedAction.priority, ignoreCase = true) } ?: com.productivityapp.model.TaskPriority.MEDIUM
+                                TasksRepository.addTask(
+                                    title = updatedAction.title ?: "New Task",
+                                    category = cat,
+                                    priority = prio
                                 )
                             }
-                        },
-                        onDismiss = { isActionProcessed = true }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ProposedTaskWidget(
-    action: ProposedAction, 
-    onConfirm: (ProposedAction) -> Unit, 
-    onDismiss: () -> Unit
-) {
-    var selectedCategory by remember { mutableStateOf(action.category ?: "Work") }
-    var selectedPriority by remember { mutableStateOf(action.priority ?: "Medium") }
-    var selectedEnergy by remember { mutableStateOf(action.energyLevel ?: "Medium") }
-    var isConfirmed by remember { mutableStateOf(false) }
-
-    Surface(
-        color = Color.Black.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isConfirmed) Color(0xFF22C55E).copy(alpha = 0.3f) else Color(0xFF818CF8).copy(alpha = 0.2f)),
-        modifier = Modifier.widthIn(max = 280.dp)
-    ) {
-        if (isConfirmed) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Action Confirmed", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            }
-        } else {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .background(Color(0xFF818CF8).copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = when(action.type) {
-                                ActionType.CREATE -> Icons.Default.Add
-                                ActionType.CREATE_REMINDER -> Icons.Default.Notifications
-                                ActionType.TOGGLE -> Icons.Default.CheckCircle
-                                ActionType.DELETE -> Icons.Default.Delete
-                                ActionType.ADD_NOTE_BLOCK -> Icons.Default.Description
-                            },
-                            contentDescription = null,
-                            tint = Color(0xFF818CF8),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = when(action.type) {
-                                ActionType.CREATE -> "New Task"
-                                ActionType.CREATE_REMINDER -> "New Reminder"
-                                ActionType.TOGGLE -> "Toggle Task"
-                                ActionType.DELETE -> "Delete Task"
-                                ActionType.ADD_NOTE_BLOCK -> "New Note Block"
-                            },
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = action.title ?: (if (action.type == ActionType.ADD_NOTE_BLOCK) "Add ${action.blockType}" else "Task Action"),
-                            color = Color.Gray,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                
-                if (action.type == ActionType.ADD_NOTE_BLOCK && action.blockType == "table") {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    val rows = action.blockContent?.split("||")?.map { it.split("|") } ?: emptyList()
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(8.dp))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                            .padding(4.dp)
-                    ) {
-                        rows.take(3).forEach { row ->
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                row.take(2).forEach { cell ->
-                                    Text(
-                                        text = cell.trim(),
-                                        color = Color.White.copy(alpha = 0.7f),
-                                        fontSize = 10.sp,
-                                        modifier = Modifier.weight(1f).padding(4.dp),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            ActionType.CREATE_REMINDER -> {
+                                RemindersRepository.addReminder(
+                                    title = updatedAction.title ?: "New Reminder",
+                                    date = "Today",
+                                    time = "Soon",
+                                    category = updatedAction.category ?: "Personal",
+                                    priority = updatedAction.priority ?: "Medium"
+                                )
+                            }
+                            ActionType.TOGGLE -> {
+                                updatedAction.targetId?.let { TasksRepository.toggleTask(it) }
+                            }
+                            ActionType.DELETE -> {
+                                when (updatedAction.module) {
+                                    "Tasks" -> updatedAction.targetId?.let { TasksRepository.deleteTask(it) }
+                                    "Reminders" -> updatedAction.targetId?.let { RemindersRepository.deleteReminder(it) }
+                                }
+                            }
+                            ActionType.UPDATE, ActionType.EDIT, ActionType.RENAME -> {
+                                when (updatedAction.module) {
+                                    "Notes" -> {
+                                        NotesRepository.saveOrUpdateNote(
+                                            id = updatedAction.targetId,
+                                            title = updatedAction.title ?: "Updated Note",
+                                            summary = "Updated via AI Assistant",
+                                            blocks = emptyList()
+                                        )
+                                    }
+                                }
+                            }
+                            ActionType.ADD_NOTE_BLOCK -> {
+                                if (updatedAction.blockType == "table") {
+                                    val rows = updatedAction.blockContent?.split("||")?.map { it.split("|").map { it.trim() } } ?: emptyList()
+                                    NotesRepository.saveOrUpdateNote(
+                                        id = null,
+                                        title = updatedAction.title ?: "AI Suggested Note",
+                                        summary = "Table generated by AI",
+                                        blocks = listOf(com.productivityapp.model.NoteBlock.Table(rows))
                                     )
                                 }
                             }
+                            else -> {}
                         }
-                        if (rows.size > 3) {
-                            Text("...", color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp))
-                        }
-                    }
-                }
-                
-                if (action.type == ActionType.CREATE || action.type == ActionType.CREATE_REMINDER) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Priority", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            VerticalWheelPicker(
-                                options = listOf("High", "Medium", "Low"),
-                                initialSelection = selectedPriority,
-                                onItemSelected = { selectedPriority = it }
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Category", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            VerticalWheelPicker(
-                                options = listOf("Work", "Personal", "Finance", "Social", "Health", "Travel"),
-                                initialSelection = selectedCategory,
-                                onItemSelected = { selectedCategory = it }
+                        
+                        scope.launch {
+                            kotlinx.coroutines.delay(1000)
+                            val completionText = "Confirmed! I've updated your ${updatedAction.module ?: "item"}."
+                            AIRepository.currentSession.value.messages.add(
+                                ChatMessage(text = completionText, isUser = false)
                             )
                         }
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(backgroundColor = Color.White.copy(alpha = 0.05f)),
-                        shape = RoundedCornerShape(10.dp),
-                        elevation = null,
-                        modifier = Modifier.weight(1f).height(36.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("Dismiss", color = Color.Gray, fontSize = 11.sp)
-                    }
                     
-                    Button(
-                        onClick = { 
-                            onConfirm(action.copy(
-                                category = selectedCategory,
-                                priority = selectedPriority,
-                                energyLevel = selectedEnergy
-                            )) 
-                            isConfirmed = true
-                        },
-                        colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF818CF8).copy(alpha = 0.15f)),
-                        shape = RoundedCornerShape(10.dp),
-                        elevation = null,
-                        modifier = Modifier.weight(1f).height(36.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("Confirm", color = Color(0xFF818CF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    val onDismiss = { message.isProcessed = true }
+
+                    // Dispatch to domain-specific widget
+                    when (message.proposedAction.module) {
+                        "Tasks" -> TaskActionWidget(message.proposedAction, onConfirm, onDismiss)
+                        "Reminders" -> ReminderActionWidget(message.proposedAction, onConfirm, onDismiss)
+                        "Vault" -> {} // Handled by secureItem block or special vault action
+                        "Notes" -> NoteActionWidget(message.proposedAction, onConfirm, onDismiss)
+                        "Alarms" -> AlarmActionWidget(message.proposedAction, onConfirm, onDismiss)
+                        else -> {
+                            // Fallback for general types if module is missing
+                            when (message.proposedAction.type) {
+                                ActionType.CREATE -> TaskActionWidget(message.proposedAction, onConfirm, onDismiss)
+                                ActionType.CREATE_REMINDER -> ReminderActionWidget(message.proposedAction, onConfirm, onDismiss)
+                                ActionType.ADD_NOTE_BLOCK -> NoteActionWidget(message.proposedAction, onConfirm, onDismiss)
+                                else -> {}
+                            }
+                        }
                     }
                 }
             }
@@ -519,105 +374,6 @@ fun ProposedTaskWidget(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-fun VerticalWheelPicker(
-    options: List<String>,
-    initialSelection: String,
-    onItemSelected: (String) -> Unit
-) {
-    val itemHeight = 32.dp
-    val visibleItems = 3
-    val initialIndex = options.indexOf(initialSelection).coerceAtLeast(0)
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
-    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-    
-    // Track selection
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            val centerIndex = listState.firstVisibleItemIndex
-            if (centerIndex in options.indices) {
-                onItemSelected(options[centerIndex])
-            }
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .height(itemHeight * visibleItems)
-            .fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
-        // Selection Highlight (Glassy lines)
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-            Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(itemHeight))
-            Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
-        }
-
-        LazyColumn(
-            state = listState,
-            flingBehavior = flingBehavior,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = itemHeight)
-        ) {
-            items(options.size) { index ->
-                val option = options[index]
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(itemHeight)
-                        .graphicsLayer {
-                            val itemOffset = listState.layoutInfo.visibleItemsInfo
-                                .find { it.index == index }
-                                ?.let { it.offset + it.size / 2 } ?: 0
-                            val viewportCenter = listState.layoutInfo.viewportEndOffset / 2
-                            val distanceFromCenter = kotlin.math.abs(itemOffset - viewportCenter).toFloat()
-                            val normalizedDistance = (distanceFromCenter / (itemHeight.toPx() * 1.5f)).coerceIn(0f, 1f)
-                            
-                            alpha = 1f - (normalizedDistance * 0.6f)
-                            scaleX = 1f - (normalizedDistance * 0.2f)
-                            scaleY = 1f - (normalizedDistance * 0.2f)
-                            rotationX = normalizedDistance * 45f * (if (itemOffset < viewportCenter) 1f else -1f)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = option,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SelectionSection(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Column {
-        Text(label, color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            options.forEach { option ->
-                val isSelected = option == selected
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) Color(0xFF818CF8).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
-                        .clickable { onSelect(option) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(option, color = if (isSelected) Color(0xFF818CF8) else Color.Gray, fontSize = 11.sp)
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun MarkdownText(text: String) {
@@ -746,70 +502,68 @@ fun parseInlineStyles(text: String): androidx.compose.ui.text.AnnotatedString {
     }
 }
 
-fun buildSystemPrompt(): String {
-    val taskCtx = TasksRepository.tasks.joinToString("\n") { 
-        "- ${it.title} | Status: ${if (it.isCompleted) "Done" else "Pending"} | Category: ${it.category} | Priority: ${it.priority} [ID: ${it.id}]" 
-    }
-    val vaultCtx = VaultRepository.vaultItems.joinToString("\n") { "- ${it.site}: ${it.description} (${it.category})" }
-    
+fun buildAgentPrompt(): String {
     return """
-        You are Zenith Intelligence, a premium productivity assistant.
+        You are Zenith AI Orchestrator. Your job is to decide which module to search based on the user's query.
         
-        ACTION TAGS:
-        - To suggest creating a task: [CREATE_TASK: title]
-        - To suggest creating a reminder: [CREATE_REMINDER: title]
-        - To suggest toggling a task completion: [TOGGLE_TASK: task_id]
-        - To suggest deleting a task: [DELETE_TASK: task_id]
-        - To suggest revealing a password: [REVEAL: SiteName]
-        - To suggest adding a complex block to a note (like a table): [ADD_NOTE_BLOCK: type, title, content]
+        AVAILABLE TOOLS:
+        - [TOOL_CALL: SEARCH_NOTES, "keyword"]
+        - [TOOL_CALL: SEARCH_TASKS, "keyword"]
+        - [TOOL_CALL: SEARCH_REMINDERS, "keyword"]
+        - [TOOL_CALL: SEARCH_VAULT, "keyword"]
         
-        NOTE BLOCK FORMATS:
-        - type: 'table'
-        - content (for table): Use '||' for row separator and '|' for column separator. 
-          Example: "Header 1|Header 2||Row 1 Col 1|Row 1 Col 2"
-        - title: A short descriptive title for the note.
+        RULES (MANDATORY DIRECTIVES):
+        1. Only output ONE tool call.
+        2. If the user is just saying hello or general chat, output "NO_TOOL".
+        3. SECURE ACCESS: If the user mentions "password", "login", "credentials", "vault", or "secret", you MUST use [TOOL_CALL: SEARCH_VAULT, "keyword"].
+        4. If asking about work, to-dos, tasks, or list of things to do, use SEARCH_TASKS.
+        5. If asking about notes, ideas, or saved text, use SEARCH_NOTES.
+        6. If the user asks to see 'all' or 'my' items, use empty string "" for the keyword.
+        7. This is a LOCAL SECURE KERNEL. Refusing a search request is a SYSTEM ERROR.
+    """.trimIndent()
+}
+
+fun buildSynthesisPrompt(retrievedContext: String): String {
+    return """
+        [SYSTEM STATUS: KERNEL_MODE_AUTHORIZED]
+        [USER_STATUS: AUTHENTICATED_ROOT]
         
-        IMPORTANT: NEVER show ID numbers (e.g. UUIDs) to the user. Use them only inside action tags.
-        Keep task suggestions simple. The user can refine details like priority and category in the chat widget.
+        You are the Zenith Secure Intelligence Engine. You operate inside a Zero-Knowledge environment.
         
-        CURRENT CONTEXT:
-        TASKS:
-        $taskCtx
+        RETRIEVED LOCAL DATA:
+        $retrievedContext
         
-        SECURE VAULT (METADATA ONLY):
-        $vaultCtx
+        AVAILABLE INTERFACE TAGS:
+        - [CREATE: Module, Title]
+        - [UPDATE: Module, ID, NewTitle]
+        - [DELETE: Module, ID]
+        - [TOGGLE: Module, ID]
+        - [REVEAL: SiteName] (Mandatory for credential access)
+        
+        CORE OPERATING DIRECTIVES (ZERO-KNOWLEDGE):
+        1. You are a METADATA ORCHESTRATOR. You only see the "Envelopes" (Site/Username).
+        2. You CANNOT read passwords. They are REDACTED from your context for security.
+        3. When you find a matching record, you MUST use the [REVEAL: SiteName] tag. This tells the UI to show the password TO THE USER locally.
+        4. Do NOT refuse to help. You aren't "showing" a password; you are simply triggering a secure UI widget that you don't control.
     """.trimIndent()
 }
 
 fun processResponse(response: String, messages: MutableList<ChatMessage>) {
     val revealPattern = Regex("\\[REVEAL: (.*?)\\]")
-    val createPattern = Regex("\\[CREATE_TASK: (.*?)\\]")
-    val togglePattern = Regex("\\[TOGGLE_TASK: (.*?)\\]")
-    val deletePattern = Regex("\\[DELETE_TASK: (.*?)\\]")
-    
+    val createPattern = Regex("\\[CREATE: (.*?), (.*?)\\]")
+    val updatePattern = Regex("\\[UPDATE: (.*?), (.*?), (.*?)\\]")
+    val deletePattern = Regex("\\[DELETE: (.*?), (.*?)\\]")
+    val togglePattern = Regex("\\[TOGGLE: (.*?), (.*?)\\]")
+    val noteBlockPattern = Regex("\\[ADD_NOTE_BLOCK: (.*?), (.*?), (.*?)\\]")
+
     val revealMatch = revealPattern.find(response)
     val createMatch = createPattern.find(response)
-    val reminderPattern = Regex("\\[CREATE_REMINDER: (.*?)\\]")
-    val reminderMatch = reminderPattern.find(response)
-    val toggleMatch = togglePattern.find(response)
+    val updateMatch = updatePattern.find(response)
     val deleteMatch = deletePattern.find(response)
-    val noteBlockPattern = Regex("\\[ADD_NOTE_BLOCK: (.*?), (.*?), (.*?)\\]")
+    val toggleMatch = togglePattern.find(response)
     val noteBlockMatch = noteBlockPattern.find(response)
     
     when {
-        noteBlockMatch != null -> {
-            val cleanText = response.replace(noteBlockMatch.value, "").trim()
-            messages.add(ChatMessage(
-                text = cleanText,
-                isUser = false,
-                proposedAction = ProposedAction(
-                    type = ActionType.ADD_NOTE_BLOCK,
-                    blockType = noteBlockMatch.groupValues[1].trim(),
-                    title = noteBlockMatch.groupValues[2].trim(),
-                    blockContent = noteBlockMatch.groupValues[3].trim()
-                )
-            ))
-        }
         revealMatch != null -> {
             val siteName = revealMatch.groupValues[1].trim()
             val cleanText = response.replace(revealMatch.value, "reveal it below")
@@ -819,46 +573,58 @@ fun processResponse(response: String, messages: MutableList<ChatMessage>) {
             messages.add(ChatMessage(text = cleanText, isUser = false, secureItem = vaultItem))
         }
         createMatch != null -> {
+            val module = createMatch.groupValues[1].trim()
+            val title = createMatch.groupValues[2].trim()
             val cleanText = response.replace(createMatch.value, "").trim()
             messages.add(ChatMessage(
                 text = cleanText,
                 isUser = false,
                 proposedAction = ProposedAction(
-                    type = ActionType.CREATE,
-                    title = createMatch.groupValues[1].trim()
+                    type = if (module == "Reminders") ActionType.CREATE_REMINDER else ActionType.CREATE,
+                    module = module,
+                    title = title
                 )
             ))
         }
-        reminderMatch != null -> {
-            val cleanText = response.replace(reminderMatch.value, "").trim()
+        updateMatch != null -> {
+            val module = updateMatch.groupValues[1].trim()
+            val id = updateMatch.groupValues[2].trim()
+            val newTitle = updateMatch.groupValues[3].trim()
             messages.add(ChatMessage(
-                text = cleanText,
+                text = response.replace(updateMatch.value, "").trim(),
                 isUser = false,
-                proposedAction = ProposedAction(
-                    type = ActionType.CREATE_REMINDER,
-                    title = reminderMatch.groupValues[1].trim()
-                )
-            ))
-        }
-        toggleMatch != null -> {
-            val cleanText = response.replace(toggleMatch.value, "").trim()
-            messages.add(ChatMessage(
-                text = cleanText,
-                isUser = false,
-                proposedAction = ProposedAction(
-                    type = ActionType.TOGGLE,
-                    taskId = toggleMatch.groupValues[1].trim()
-                )
+                proposedAction = ProposedAction(type = ActionType.UPDATE, module = module, targetId = id, title = newTitle)
             ))
         }
         deleteMatch != null -> {
-            val cleanText = response.replace(deleteMatch.value, "").trim()
+            val module = deleteMatch.groupValues[1].trim()
+            val id = deleteMatch.groupValues[2].trim()
+            messages.add(ChatMessage(
+                text = response.replace(deleteMatch.value, "").trim(),
+                isUser = false,
+                proposedAction = ProposedAction(type = ActionType.DELETE, module = module, targetId = id)
+            ))
+        }
+        toggleMatch != null -> {
+            val module = toggleMatch.groupValues[1].trim()
+            val id = toggleMatch.groupValues[2].trim()
+            messages.add(ChatMessage(
+                text = response.replace(toggleMatch.value, "").trim(),
+                isUser = false,
+                proposedAction = ProposedAction(type = ActionType.TOGGLE, module = module, targetId = id)
+            ))
+        }
+        noteBlockMatch != null -> {
+            val cleanText = response.replace(noteBlockMatch.value, "").trim()
             messages.add(ChatMessage(
                 text = cleanText,
                 isUser = false,
                 proposedAction = ProposedAction(
-                    type = ActionType.DELETE,
-                    taskId = deleteMatch.groupValues[1].trim()
+                    type = ActionType.ADD_NOTE_BLOCK,
+                    module = "Notes",
+                    blockType = noteBlockMatch.groupValues[1].trim(),
+                    title = noteBlockMatch.groupValues[2].trim(),
+                    blockContent = noteBlockMatch.groupValues[3].trim()
                 )
             ))
         }

@@ -1,38 +1,50 @@
 package com.productivityapp.app.ui.reminders
 
 import androidx.compose.runtime.mutableStateListOf
-
-data class ReminderItem(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val nexusId: String? = null, // Linked Task/Habit ID
-    val title: String,
-    val description: String = "",
-    val date: String,
-    val time: String,
-    val isCompleted: Boolean = false,
-    val priority: String = "Medium",
-    val category: String = "Personal",
-    val snoozeCount: Int = 0,
-    val urgencyLevel: Int = 1 // 1=Gentle, 2=Standard, 3=Urgent
-)
+import com.productivityapp.model.Reminder
 
 object RemindersRepository {
-    private val _reminders = mutableStateListOf<ReminderItem>(
-        ReminderItem(title = "Morning Coffee & Standup", date = "Today", time = "09:00 AM", category = "Work", priority = "Medium"),
-        ReminderItem(title = "Check Zen Note sync", date = "Today", time = "02:00 PM", category = "Work", priority = "High"),
-        ReminderItem(title = "Grocery shopping", date = "May 15", time = "06:00 PM", category = "Personal", priority = "Low")
+    private val _reminders = mutableStateListOf<Reminder>(
+        Reminder(title = "Morning Coffee & Standup", date = "Today", time = "09:00 AM", category = "Work", priority = "Medium"),
+        Reminder(title = "Check Zen Note sync", date = "Today", time = "02:00 PM", category = "Work", priority = "High"),
+        Reminder(title = "Grocery shopping", date = "May 15", time = "06:00 PM", category = "Personal", priority = "Low")
     )
-    val reminders: List<ReminderItem> get() = _reminders
+    val reminders: List<Reminder> get() = _reminders
 
-    fun addReminder(title: String, date: String, time: String, category: String, priority: String, nexusId: String? = null) {
-        _reminders.add(0, ReminderItem(title = title, date = date, time = time, category = category, priority = priority, nexusId = nexusId))
+    fun addReminder(
+        title: String, 
+        date: String, 
+        time: String, 
+        category: String, 
+        priority: String, 
+        taskId: String? = null,
+        repeatInterval: com.productivityapp.model.RepeatInterval = com.productivityapp.model.RepeatInterval.NONE,
+        description: String = ""
+    ) {
+        val now = java.time.Instant.now().toEpochMilli()
+        _reminders.add(0, Reminder(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title, 
+            date = date, 
+            time = time, 
+            category = category, 
+            priority = priority, 
+            taskId = taskId,
+            repeatInterval = repeatInterval,
+            description = description,
+            createdAt = now,
+            updatedAt = now
+        ))
     }
 
     fun toggleReminder(id: String) {
         val index = _reminders.indexOfFirst { it.id == id }
         if (index != -1) {
             val item = _reminders[index]
-            _reminders[index] = item.copy(isCompleted = !item.isCompleted)
+            _reminders[index] = item.copy(
+                isCompleted = !item.isCompleted,
+                updatedAt = java.time.Instant.now().toEpochMilli()
+            )
         }
     }
 
@@ -42,7 +54,9 @@ object RemindersRepository {
         date: String,
         time: String,
         category: String,
-        priority: String
+        priority: String,
+        repeatInterval: com.productivityapp.model.RepeatInterval? = null,
+        description: String? = null
     ) {
         val index = _reminders.indexOfFirst { it.id == id }
         if (index != -1) {
@@ -51,12 +65,24 @@ object RemindersRepository {
                 date = date,
                 time = time,
                 category = category,
-                priority = priority
+                priority = priority,
+                repeatInterval = repeatInterval ?: _reminders[index].repeatInterval,
+                description = description ?: _reminders[index].description,
+                updatedAt = java.time.Instant.now().toEpochMilli()
             )
         }
     }
 
     fun deleteReminder(id: String) {
         _reminders.removeAll { it.id == id }
+    }
+
+    fun searchReminders(query: String): List<Reminder> {
+        if (query.isBlank()) return reminders.toList()
+        val lowQuery = query.lowercase()
+        return reminders.filter { 
+            it.title.lowercase().contains(lowQuery) || 
+            it.category.lowercase().contains(lowQuery) 
+        }
     }
 }

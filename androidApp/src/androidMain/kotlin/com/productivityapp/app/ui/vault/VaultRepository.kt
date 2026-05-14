@@ -15,4 +15,13 @@ object VaultRepository {
     fun removeVaultItem(item: VaultItem) {
         vaultItems.remove(item)
     }
+
+    fun searchVault(query: String): List<VaultItem> {
+        val lowQuery = query.lowercase().trim()
+        if (lowQuery.isBlank() || lowQuery == "password" || lowQuery == "passwords" || lowQuery == "vault" || lowQuery == "all") return vaultItems.toList()
+        return vaultItems.filter { 
+            it.site.lowercase().contains(lowQuery) || 
+            it.description.lowercase().contains(lowQuery) 
+        }
+    }
 }

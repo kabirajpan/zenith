@@ -6,16 +6,18 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.productivityapp.app.ui.vault.VaultItem
 
 enum class ActionType {
-    CREATE, TOGGLE, DELETE, CREATE_REMINDER, ADD_NOTE_BLOCK
+    CREATE, TOGGLE, DELETE, CREATE_REMINDER, ADD_NOTE_BLOCK,
+    UPDATE, RENAME, EDIT, REVEAL
 }
 
 data class ProposedAction(
     val type: ActionType,
+    val module: String? = null, // "Tasks", "Notes", "Reminders", "Vault"
     val title: String? = null,
     val category: String? = null,
     val priority: String? = null,
     val energyLevel: String? = null,
-    val taskId: String? = null,
+    val targetId: String? = null,
     val blockType: String? = null,
     val blockContent: String? = null
 )
@@ -25,7 +27,8 @@ data class ChatMessage(
     val text: String,
     val isUser: Boolean,
     val secureItem: VaultItem? = null,
-    val proposedAction: ProposedAction? = null
+    val proposedAction: ProposedAction? = null,
+    var isProcessed: Boolean = false
 )
 
 data class ChatSession(

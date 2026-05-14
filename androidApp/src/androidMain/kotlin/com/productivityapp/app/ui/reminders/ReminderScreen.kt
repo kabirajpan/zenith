@@ -1,6 +1,7 @@
 package com.productivityapp.app.ui.reminders
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,15 +19,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.productivityapp.app.ui.tasks.VerticalWheelPicker
+import com.productivityapp.app.ui.tasks.ZenithCompactWheelPicker
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import com.productivityapp.model.Reminder
+import com.productivityapp.model.RepeatInterval
 
 @Composable
 fun ReminderScreen() {
@@ -36,8 +40,8 @@ fun ReminderScreen() {
     
     val reminders = RemindersRepository.reminders
     var showAddModal by remember { mutableStateOf(false) }
-    var selectedReminderForDetail by remember { mutableStateOf<ReminderItem?>(null) }
-    var reminderToEdit by remember { mutableStateOf<ReminderItem?>(null) }
+    var selectedReminderForDetail by remember { mutableStateOf<Reminder?>(null) }
+    var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
  
     val filteredReminders by remember(searchQuery, selectedCategory) {
         derivedStateOf {
@@ -165,8 +169,8 @@ fun ReminderScreen() {
     if (showAddModal) {
         AddReminderModal(
             onDismiss = { showAddModal = false },
-            onSave = { title, date, time, category, priority ->
-                RemindersRepository.addReminder(title, date, time, category, priority)
+            onSave = { title, date, time, category, priority, repeatInterval, description ->
+                RemindersRepository.addReminder(title, date, time, category, priority, repeatInterval = repeatInterval, description = description)
                 showAddModal = false
             }
         )
@@ -186,8 +190,8 @@ fun ReminderScreen() {
         AddReminderModal(
             reminderToEdit = item,
             onDismiss = { reminderToEdit = null },
-            onSave = { title, date, time, category, priority ->
-                RemindersRepository.updateReminder(item.id, title, date, time, category, priority)
+            onSave = { title, date, time, category, priority, repeatInterval, description ->
+                RemindersRepository.updateReminder(item.id, title, date, time, category, priority, repeatInterval = repeatInterval, description = description)
                 reminderToEdit = null
             }
         )
@@ -195,7 +199,7 @@ fun ReminderScreen() {
 }
 
 @Composable
-fun ReminderCard(item: ReminderItem, onToggle: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
+fun ReminderCard(item: Reminder, onToggle: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
     Surface(
         color = Color.White.copy(alpha = 0.04f),
         shape = RoundedCornerShape(16.dp),
@@ -260,9 +264,9 @@ fun ReminderCard(item: ReminderItem, onToggle: () -> Unit, onDelete: () -> Unit,
 
 @Composable
 fun AddReminderModal(
-    reminderToEdit: ReminderItem? = null,
+    reminderToEdit: Reminder? = null,
     onDismiss: () -> Unit, 
-    onSave: (String, String, String, String, String) -> Unit
+    onSave: (String, String, String, String, String, RepeatInterval, String) -> Unit
 ) {
     var title by remember { mutableStateOf(reminderToEdit?.title ?: "") }
     
@@ -284,121 +288,147 @@ fun AddReminderModal(
     
     var category by remember { mutableStateOf(reminderToEdit?.category ?: "Personal") }
     var priority by remember { mutableStateOf(reminderToEdit?.priority ?: "Medium") }
+    var repeatInterval by remember { mutableStateOf(reminderToEdit?.repeatInterval ?: RepeatInterval.NONE) }
+    var description by remember { mutableStateOf(reminderToEdit?.description ?: "") }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.80f),
+            modifier = Modifier.fillMaxWidth(0.92f),
             color = Color(0xFF0F172A),
             shape = RoundedCornerShape(24.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(Color(0xFF818CF8), CircleShape))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("New Reminder", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(if (reminderToEdit != null) "Edit Reminder" else "New Reminder", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
                 
                 ReminderInputField(
-                    label = "Remind me about...",
+                    label = "Title",
                     value = title,
                     onValueChange = { title = it },
-                    placeholder = "e.g. Call the team"
+                    placeholder = "What's the reminder?"
                 )
 
-                // Category & Priority Row (Premium Wheels)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Category", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        VerticalWheelPicker(
-                            options = listOf("Work", "Personal", "Finance", "Social", "Health", "Travel"),
-                            initialSelection = category,
-                            onItemSelected = { category = it }
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Priority", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        VerticalWheelPicker(
-                            options = listOf("Low", "Medium", "High"),
-                            initialSelection = priority,
-                            onItemSelected = { priority = it }
-                        )
-                    }
-                }
-                
-                // Date & Time Wheel Pickers
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Date & Time", color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
+                ReminderInputField(
+                    label = "Description (Optional)",
+                    value = description,
+                    onValueChange = { description = it },
+                    placeholder = "Add more details..."
+                )
+
+                // Fused Category/Priority Section
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Date Wheels
-                        Column(modifier = Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Month", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            VerticalWheelPicker(
-                                options = java.time.Month.values().map { it.name.take(3).capitalize() },
-                                initialSelection = selectedMonth,
-                                onItemSelected = { selectedMonth = it }
+                        Text("CATEGORY", modifier = Modifier.weight(1f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                        Text("PRIORITY", modifier = Modifier.weight(1f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                        Text("REPEAT", modifier = Modifier.weight(1f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                    }
+                    
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(96.dp),
+                        color = Color.White.copy(alpha = 0.03f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            ZenithCompactWheelPicker(
+                                items = listOf("Personal", "Work", "Urgent", "Other"),
+                                initialValue = category,
+                                onValueChange = { category = it },
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Day", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            VerticalWheelPicker(
-                                options = (1..31).map { it.toString() },
-                                initialSelection = selectedDay,
-                                onItemSelected = { selectedDay = it }
+                            ZenithCompactWheelPicker(
+                                items = listOf("Low", "Medium", "High"),
+                                initialValue = priority,
+                                onValueChange = { priority = it },
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-
-                        // Time Wheels
-                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Hr", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            VerticalWheelPicker(
-                                options = (1..12).map { it.toString().padStart(2, '0') },
-                                initialSelection = selectedHour,
-                                onItemSelected = { selectedHour = it }
-                            )
-                        }
-                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Min", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            VerticalWheelPicker(
-                                options = (0..59).map { it.toString().padStart(2, '0') },
-                                initialSelection = selectedMinute,
-                                onItemSelected = { selectedMinute = it }
-                            )
-                        }
-                        Column(modifier = Modifier.weight(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Mode", color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            VerticalWheelPicker(
-                                options = listOf("AM", "PM"),
-                                initialSelection = selectedAmPm,
-                                onItemSelected = { selectedAmPm = it }
+                            ZenithCompactWheelPicker(
+                                items = RepeatInterval.values().map { it.name.lowercase().capitalize() },
+                                initialValue = repeatInterval.name.lowercase().capitalize(),
+                                onValueChange = { selected ->
+                                    repeatInterval = RepeatInterval.valueOf(selected.uppercase())
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                // Fused Schedule Section
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("MONTH", modifier = Modifier.weight(1.2f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                        Text("DAY", modifier = Modifier.weight(0.8f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                        Text("HR", modifier = Modifier.weight(0.8f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                        Text("MIN", modifier = Modifier.weight(0.8f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                        Text("MODE", modifier = Modifier.weight(0.8f), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 1.sp)
+                    }
+                    
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(96.dp),
+                        color = Color.White.copy(alpha = 0.03f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ZenithCompactWheelPicker(
+                                items = java.time.Month.values().map { it.name.take(3).capitalize() },
+                                initialValue = selectedMonth,
+                                onValueChange = { selectedMonth = it },
+                                modifier = Modifier.weight(1.2f)
+                            )
+                            ZenithCompactWheelPicker(
+                                items = (1..31).map { it.toString() },
+                                initialValue = selectedDay,
+                                onValueChange = { selectedDay = it },
+                                modifier = Modifier.weight(0.8f)
+                            )
+                            Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.05f)))
+                            ZenithCompactWheelPicker(
+                                items = (1..12).toList(),
+                                initialValue = selectedHour.toIntOrNull() ?: 7,
+                                onValueChange = { selectedHour = it.toString() },
+                                modifier = Modifier.weight(0.8f)
+                            )
+                            ZenithCompactWheelPicker(
+                                items = (0..59).toList(),
+                                initialValue = selectedMinute.toIntOrNull() ?: 0,
+                                format = { it.toString().padStart(2, '0') },
+                                onValueChange = { selectedMinute = it.toString().padStart(2, '0') },
+                                modifier = Modifier.weight(0.8f)
+                            )
+                            ZenithCompactWheelPicker(
+                                items = listOf("AM", "PM"),
+                                initialValue = selectedAmPm,
+                                onValueChange = { selectedAmPm = it },
+                                modifier = Modifier.weight(0.8f)
+                            )
+                        }
+                    }
+                }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -413,7 +443,7 @@ fun AddReminderModal(
                     Button(
                         onClick = { 
                             if (title.isNotBlank()) {
-                                onSave(title, selectedMonth + " " + selectedDay, "$selectedHour:$selectedMinute $selectedAmPm", category, priority) 
+                                onSave(title, "$selectedMonth $selectedDay", "$selectedHour:$selectedMinute $selectedAmPm", category, priority, repeatInterval, description) 
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -439,7 +469,7 @@ fun AddReminderModal(
 
 @Composable
 fun ReminderDetailModal(
-    item: ReminderItem,
+    item: Reminder,
     onDismiss: () -> Unit,
     onDelete: () -> Unit,
     onToggle: () -> Unit,
@@ -564,23 +594,24 @@ fun RowScope.DetailRowItem(label: String, value: String, icon: androidx.compose.
 
 @Composable
 fun ReminderInputField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String = "") {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = Color.Gray.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Text(label.uppercase(), color = Color.Gray.copy(alpha = 0.5f), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(4.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.04f),
-            shape = RoundedCornerShape(10.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.03f))
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.03f))
         ) {
-            Box(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-                if (value.isEmpty() && placeholder.isNotEmpty()) {
-                    Text(placeholder, color = Color.Gray.copy(alpha = 0.4f), fontSize = 13.sp)
+            Box(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
+                if (value.isEmpty()) {
+                    Text(placeholder, color = Color.Gray.copy(alpha = 0.4f), fontSize = 11.sp)
                 }
                 androidx.compose.foundation.text.BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF818CF8)),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp),
+                    cursorBrush = SolidColor(Color(0xFF818CF8)),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

@@ -3,66 +3,89 @@ package com.productivityapp.app.ui.tasks
 import androidx.compose.runtime.mutableStateListOf
 import com.productivityapp.app.ui.reminders.RemindersRepository
 
-data class TaskItem(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val title: String,
-    val description: String = "",
-    val time: String,
-    val priority: String,
-    val category: String,
-    val isCompleted: Boolean = false,
-    val estimatedMins: Int = 30,
-    val energyLevel: String = "Medium", // Low, Medium, High
-    val completedAt: Long? = null
-)
+import com.productivityapp.model.Task
+import com.productivityapp.model.TaskPriority
+import com.productivityapp.model.TaskStatus
+import com.productivityapp.model.TaskCategory
 
 object TasksRepository {
-    val tasks = mutableStateListOf<TaskItem>(
-        TaskItem(title = "Finish Zenith AI Integration", category = "Work", priority = "High", energyLevel = "High", estimatedMins = 120, time = "Today"),
-        TaskItem(title = "Weekly budget review", category = "Finance", priority = "Medium", energyLevel = "Low", estimatedMins = 30, time = "Today"),
-        TaskItem(title = "30-min Cardio", category = "Health", priority = "High", energyLevel = "High", estimatedMins = 30, time = "Today"),
-        TaskItem(title = "Call Mom", category = "Social", priority = "Medium", energyLevel = "Low", estimatedMins = 15, time = "Today"),
-        TaskItem(title = "Plan weekend trip", category = "Travel", priority = "Low", energyLevel = "Medium", estimatedMins = 45, time = "Today")
+    val tasks = mutableStateListOf<Task>(
+        Task(
+            id = java.util.UUID.randomUUID().toString(),
+            title = "Finish Zenith AI Integration", 
+            category = TaskCategory.WORK, 
+            priority = TaskPriority.HIGH, 
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        ),
+        Task(
+            id = java.util.UUID.randomUUID().toString(),
+            title = "Weekly budget review", 
+            category = TaskCategory.FINANCE, 
+            priority = TaskPriority.MEDIUM,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
     )
     
     fun addTask(
         title: String, 
-        category: String, 
-        priority: String, 
-        description: String = "", 
-        estimatedMins: Int = 30, 
-        energyLevel: String = "Medium"
+        category: TaskCategory, 
+        priority: TaskPriority, 
+        description: String = "",
+        dueDate: String? = null,
+        dueTime: String? = null,
+        hasReminder: Boolean = false,
+        hasAlarm: Boolean = false
     ) {
-        val newTask = TaskItem(
+        val now = System.currentTimeMillis()
+        val newTask = Task(
+            id = java.util.UUID.randomUUID().toString(),
             title = title,
             description = description,
-            time = "Today",
             priority = priority,
             category = category,
-            estimatedMins = estimatedMins,
-            energyLevel = energyLevel
+            dueDate = dueDate,
+            dueTime = dueTime,
+            hasReminder = hasReminder,
+            hasAlarm = hasAlarm,
+            createdAt = now,
+            updatedAt = now
         )
         tasks.add(0, newTask)
         
         // Intelligent Alarm-Reminder Nexus
-        RemindersRepository.addReminder(
-            title = "Task: $title",
-            date = "Today",
-            time = "Soon",
-            category = category,
-            priority = priority,
-            nexusId = newTask.id
-        )
+        if (hasReminder) {
+            RemindersRepository.addReminder(
+                title = "Task: $title",
+                date = dueDate ?: "Today",
+                time = dueTime ?: "Soon",
+                category = category.name,
+                priority = priority.name,
+                taskId = newTask.id
+            )
+        }
+        
+        if (hasAlarm) {
+            // Future Alarm implementation
+        }
     }
     
     fun toggleTask(id: String) {
         val index = tasks.indexOfFirst { it.id == id }
         if (index != -1) {
-            val isNowCompleted = !tasks[index].isCompleted
-            tasks[index] = tasks[index].copy(isCompleted = isNowCompleted)
+            val currentTask = tasks[index]
+            val newStatus = if (currentTask.status == TaskStatus.DONE) TaskStatus.PENDING else TaskStatus.DONE
+            val now = System.currentTimeMillis()
+            
+            tasks[index] = currentTask.copy(
+                status = newStatus,
+                completedAt = if (newStatus == TaskStatus.DONE) now else null,
+                updatedAt = now
+            )
             
             // Sync with Heatmap Tracker
-            if (isNowCompleted) {
+            if (newStatus == TaskStatus.DONE) {
                 com.productivityapp.app.ui.dashboard.ProductivityTracker.recordCompletion()
             } else {
                 com.productivityapp.app.ui.dashboard.ProductivityTracker.removeCompletion()
@@ -77,22 +100,41 @@ object TasksRepository {
     fun updateTask(
         id: String,
         title: String,
-        category: String,
-        priority: String,
+        category: TaskCategory,
+        priority: TaskPriority,
         description: String,
-        estimatedMins: Int,
-        energyLevel: String
+        dueDate: String? = null,
+        dueTime: String? = null,
+        status: TaskStatus = TaskStatus.PENDING,
+        hasReminder: Boolean = false,
+        hasAlarm: Boolean = false
     ) {
         val index = tasks.indexOfFirst { it.id == id }
         if (index != -1) {
+            val now = System.currentTimeMillis()
             tasks[index] = tasks[index].copy(
                 title = title,
                 category = category,
                 priority = priority,
                 description = description,
-                estimatedMins = estimatedMins,
-                energyLevel = energyLevel
+                dueDate = dueDate,
+                dueTime = dueTime,
+                status = status,
+                hasReminder = hasReminder,
+                hasAlarm = hasAlarm,
+                updatedAt = now,
+                completedAt = if (status == TaskStatus.DONE) now else null
             )
+        }
+    }
+
+    fun searchTasks(query: String): List<Task> {
+        val lowQuery = query.lowercase().trim()
+        if (lowQuery.isBlank() || lowQuery == "task" || lowQuery == "tasks" || lowQuery == "all") return tasks.toList()
+        return tasks.filter { 
+            it.title.lowercase().contains(lowQuery) || 
+            it.category.name.lowercase().contains(lowQuery) ||
+            it.priority.name.lowercase().contains(lowQuery)
         }
     }
 }

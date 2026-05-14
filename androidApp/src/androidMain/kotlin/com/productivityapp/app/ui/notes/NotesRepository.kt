@@ -21,4 +21,13 @@ object NotesRepository {
             notes.add(0, NoteItem(id = java.util.UUID.randomUUID().toString(), title = title, summary = summary, blocks = blocks.toList()))
         }
     }
+
+    fun searchNotes(query: String): List<NoteItem> {
+        val lowQuery = query.lowercase().trim()
+        if (lowQuery.isBlank() || lowQuery == "note" || lowQuery == "notes" || lowQuery == "all") return notes.toList()
+        return notes.filter { 
+            it.title.lowercase().contains(lowQuery) || 
+            it.summary.lowercase().contains(lowQuery) 
+        }
+    }
 }

@@ -43,12 +43,18 @@ import com.productivityapp.app.ui.alarm.AlarmScreen
 import com.productivityapp.app.ui.notes.NoteEditorScreen
 import com.productivityapp.app.ui.tasks.TasksRepository
 import com.productivityapp.app.ui.tasks.AddTaskModal
+import com.productivityapp.model.Task
+import com.productivityapp.model.TaskPriority
+import com.productivityapp.model.TaskStatus
+import com.productivityapp.model.TaskCategory
 import com.productivityapp.app.ui.ai.AIScreen
 import com.productivityapp.app.ui.ai.AIRepository
+import com.productivityapp.model.Reminder
+import com.productivityapp.model.RepeatInterval
 import com.productivityapp.app.ui.reminders.AddReminderModal
 import com.productivityapp.app.ui.reminders.RemindersRepository
 import com.productivityapp.app.ui.alarm.AlarmEntryModal
-import com.productivityapp.app.ui.alarm.AlarmItem
+import com.productivityapp.model.Alarm
 import com.productivityapp.app.ui.vault.AddVaultItemModal
 import com.productivityapp.app.ui.vault.VaultRepository
 import com.productivityapp.app.ui.vault.VaultItem
@@ -260,8 +266,8 @@ fun DashboardScreen() {
         if (showAddReminderModal) {
             AddReminderModal(
                 onDismiss = { showAddReminderModal = false },
-                onSave = { title, date, time, category, priority ->
-                    RemindersRepository.addReminder(title, date, time, category, priority)
+                onSave = { title: String, date: String, time: String, category: String, priority: String, repeatInterval: RepeatInterval, description: String ->
+                    RemindersRepository.addReminder(title, date, time, category, priority, repeatInterval = repeatInterval, description = description)
                     showAddReminderModal = false
                 }
             )
@@ -270,9 +276,8 @@ fun DashboardScreen() {
         if (showAddAlarmModal) {
             AlarmEntryModal(
                 onDismiss = { showAddAlarmModal = false },
-                onSave = { time, label, days ->
-                    // For now, since we don't have a global AlarmRepository with a mutable list accessible everywhere,
-                    // we'll just dismiss. If there's a repository, we should add it there.
+                onSave = { time: String, label: String, days: List<String>, isVibrate: Boolean, escalationType: String, sound: String ->
+                    // Logic to add alarm if repository exists
                     showAddAlarmModal = false
                 }
             )
@@ -282,8 +287,8 @@ fun DashboardScreen() {
             AddTaskModal(
                 initialCategory = "Work",
                 onDismiss = { showAddTaskModal = false },
-                onTaskCreated = { title, cat, prio, desc, est, energy ->
-                    TasksRepository.addTask(title, cat, prio, desc, est, energy)
+                onTaskCreated = { title, cat, prio, desc, dueDate, dueTime, hasReminder, hasAlarm ->
+                    TasksRepository.addTask(title, cat, prio, desc, dueDate, dueTime, hasReminder, hasAlarm)
                     showAddTaskModal = false
                 }
             )
@@ -735,7 +740,8 @@ fun ModuleGridItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun DashboardTaskRow(task: com.productivityapp.app.ui.tasks.TaskItem) {
+fun DashboardTaskRow(task: com.productivityapp.model.Task) {
+    val isDone = task.status == com.productivityapp.model.TaskStatus.DONE
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -747,22 +753,22 @@ fun DashboardTaskRow(task: com.productivityapp.app.ui.tasks.TaskItem) {
             modifier = Modifier
                 .size(16.dp)
                 .clip(CircleShape)
-                .background(if (task.isCompleted) Color(0xFF818CF8) else Color.Transparent)
-                .border(1.dp, if (task.isCompleted) Color(0xFF818CF8) else Color.Gray.copy(alpha = 0.3f), CircleShape),
+                .background(if (isDone) Color(0xFF818CF8) else Color.Transparent)
+                .border(1.dp, if (isDone) Color(0xFF818CF8) else Color.Gray.copy(alpha = 0.3f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (task.isCompleted) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+            if (isDone) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = task.title, 
-            color = if (task.isCompleted) Color.Gray else Color.White, 
+            color = if (isDone) Color.Gray else Color.White, 
             fontSize = 13.sp, 
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
-        Text(task.category, color = Color(0xFF818CF8).copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(task.category.name, color = Color(0xFF818CF8).copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
